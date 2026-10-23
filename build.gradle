@@ -1,6 +1,6 @@
 plugins {
     id 'base'
-    id 'net.neoforged.moddev' version '2.0.141' apply false
+    id 'net.neoforged.moddev' version '2.0.148' apply false
 }
 def requestedVersion = providers.gradleProperty('version').getOrElse('0.1.0-dev')
 def requestedCommit = providers.gradleProperty('buildId').getOrElse('local')
