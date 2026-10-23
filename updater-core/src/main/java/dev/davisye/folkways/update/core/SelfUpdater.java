@@ -55,7 +55,7 @@ public final class SelfUpdater {
     public String adopt(Path companion) throws Exception {
         return u.locked(() -> {
             if (!state().owned.isEmpty()) throw new IOException("Updater ownership is already recorded; local-change protection will not be reset");
-            Path target = companion.toAbsolutePath().normalize(); u.safe(target);
+            Path target = u.existingInput(companion);
             if (!Objects.equals(target.getParent(), u.mods) || !target.getFileName().toString().endsWith(".jar")) throw new IOException("Companion must be one existing game/mods JAR");
             List<Path> companions = companions();
             if (companions.size() != 1 || !companions.getFirst().equals(target)) throw new IOException("Duplicate or unrecorded updater companion JAR");

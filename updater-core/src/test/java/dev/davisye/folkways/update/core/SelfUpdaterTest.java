@@ -171,6 +171,68 @@ class SelfUpdaterTest {
         Files.write(game.resolve("mods/renamed-local.jar"), oldCompanion);
         assertThrows(IOException.class, updater::checkAndStage); assertOld();
     }
+    @Test void adoptsAndUpdatesThroughAnExternalGameRootAlias(@TempDir Path aliases) throws Exception {
+        fixture(); Files.delete(game.resolve(".folkways-updater/self-state.json"));
+        Path alias = aliases.resolve("game-alias"); directoryAlias(alias, game.toRealPath());
+        try {
+            SelfUpdater aliased = new SelfUpdater(alias, source(), alias.resolve("copied-runner.jar"));
+            assertTrue(aliased.adopt(alias.resolve("mods/folkways-updater-installed.jar")).contains("ownership recorded"));
+            assertTrue(aliased.prepare().contains("Updater installed"));
+            assertArrayEquals(downloads.get(metadata.artifacts.get(1).url), Files.readAllBytes(companion()));
+        } finally { Files.delete(alias); }
+    }
+    @Test void rootAliasCannotHideAnInternalLinkBackToTheGame(@TempDir Path aliases) throws Exception {
+        fixture(); Files.delete(game.resolve(".folkways-updater/self-state.json"));
+        Path alias = aliases.resolve("game-alias"), inside = game.resolve("inside-link");
+        directoryAlias(alias, game.toRealPath()); directoryAlias(inside, game.toRealPath());
+        try {
+            SelfUpdater aliased = new SelfUpdater(alias, source(), alias.resolve("copied-runner.jar"));
+            assertThrows(IOException.class, () -> aliased.adopt(alias.resolve("inside-link/mods/folkways-updater-installed.jar")));
+            assertFalse(Files.exists(game.resolve(".folkways-updater/self-state.json"))); assertOld();
+        } finally { Files.delete(inside); Files.delete(alias); }
+    }
+    @Test void managedModsDirectoryLinkIsStillRefused() throws Exception {
+        fixture(); Path actual = game.resolve("actual-mods"); Files.move(game.resolve("mods"), actual);
+        Path linked = game.resolve("mods"); directoryAlias(linked, actual.toRealPath());
+        try { assertThrows(IOException.class, () -> new SelfUpdater(game)); }
+        finally { Files.delete(linked); Files.move(actual, linked); }
+    }
+    @Test void companionFileLinkIsRefusedBeforeAdoption() throws Exception {
+        fixture(); Files.delete(game.resolve(".folkways-updater/self-state.json"));
+        Path actual = game.resolve("actual-companion.jar"); Files.move(companion(), actual);
+        try {
+            try { Files.createSymbolicLink(companion(), actual.toRealPath()); }
+            catch (FileSystemException | UnsupportedOperationException e) {
+                org.junit.jupiter.api.Assumptions.assumeTrue(false, "File symlinks unavailable: " + e.getClass().getSimpleName());
+            }
+            assertThrows(IOException.class, () -> updater.adopt(companion()));
+            assertFalse(Files.exists(game.resolve(".folkways-updater/self-state.json")));
+        } finally { Files.deleteIfExists(companion()); Files.move(actual, companion()); }
+    }
+    @Test void sameNamedCompanionOutsideGameCannotBeAdopted(@TempDir Path outside) throws Exception {
+        fixture(); Files.delete(game.resolve(".folkways-updater/self-state.json"));
+        Path other = outside.resolve(companion().getFileName()); Files.write(other, oldCompanion);
+        assertThrows(IOException.class, () -> updater.adopt(other)); assertOld();
+    }
+    @Test void adoptsThroughWindowsShortGameRootWhenAvailable(@TempDir Path parent) throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+        game = Files.createDirectory(parent.resolve("updater game root with long names")); fixture();
+        Files.delete(game.resolve(".folkways-updater/self-state.json"));
+        Process command = new ProcessBuilder("cmd.exe", "/d", "/c", "for %I in (\"" + game + "\") do @echo %~sI").redirectErrorStream(true).start();
+        String output = new String(command.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        assertEquals(0, command.waitFor(), output); Path shortGame = Path.of(output);
+        org.junit.jupiter.api.Assumptions.assumeFalse(shortGame.equals(game.toRealPath()), "This volume does not expose an 8.3 root alias");
+        assertTrue(Files.isSameFile(shortGame, game));
+        SelfUpdater aliased = new SelfUpdater(shortGame, source(), shortGame.resolve("copied-runner.jar"));
+        assertTrue(aliased.adopt(shortGame.resolve("mods/folkways-updater-installed.jar")).contains("ownership recorded"));
+        assertTrue(aliased.prepare().contains("Updater installed"));
+    }
+    static void directoryAlias(Path link, Path target) throws Exception {
+        if (!System.getProperty("os.name").startsWith("Windows")) { Files.createSymbolicLink(link, target); return; }
+        Process command = new ProcessBuilder("cmd.exe", "/d", "/c", "mklink", "/J", link.toString(), target.toString()).redirectErrorStream(true).start();
+        String output = new String(command.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, command.waitFor(), output); assertTrue(Files.isSameFile(link, target));
+    }
     @Test void localRecompilationAfterAdoptionIsNeverOverwritten() throws Exception {
         fixture(); updater.checkAndStage(); byte[] local = oldBootstrap.clone(); local[0] ^= 1; Files.write(bin(), local);
         assertTrue(updater.prepare().contains("current files retained")); assertArrayEquals(local, Files.readAllBytes(bin()));

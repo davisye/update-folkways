@@ -412,6 +412,21 @@ public final class Updater {
     static void verify(byte[] b, String digest, long size) throws Exception { if (b.length != size || !sha(b).equals(digest)) throw new IOException("Size/SHA-256 mismatch; preserving local files"); }
     static void fileName(String name) throws IOException { if (name == null || !name.matches("[A-Za-z0-9][A-Za-z0-9._+\\-]*\\.jar")) throw new IOException("Unsafe JAR filename"); }
 
+    /** Re-anchor an existing CLI input through a game-root alias, without resolving links inside the game. */
+    Path existingInput(Path path) throws IOException {
+        Path input = path.toAbsolutePath().normalize(), root = null;
+        for (Path ancestor = input; ancestor != null; ancestor = ancestor.getParent()) {
+            if (Files.exists(ancestor, LinkOption.NOFOLLOW_LINKS) && Files.isSameFile(ancestor, game)) root = ancestor;
+        }
+        if (root == null) throw new IOException("Path escapes game directory");
+        // Use the outermost match: a link inside the game back to its root must remain a checked component.
+        Path anchored = game.resolve(root.relativize(input));
+        safe(anchored);
+        Path canonical = anchored.toRealPath(LinkOption.NOFOLLOW_LINKS);
+        safe(canonical);
+        return canonical;
+    }
+
     void safe(Path path) throws IOException {
         Path p = path.toAbsolutePath().normalize();
         if (!p.startsWith(game)) throw new IOException("Path escapes game directory");
