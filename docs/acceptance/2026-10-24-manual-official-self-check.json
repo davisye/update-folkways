@@ -2,7 +2,7 @@
   "schema": 1,
   "date": "2026-10-24",
   "repository": "davisye/update-folkways",
-  "scenario": "official same-byte manual JAR rename and independent self-check on an isolated installation copy",
+  "scenario": "manual installation of an official same-byte JAR under its published filename and independent self-check on an isolated copy",
   "policy": "explicit config boolean; updater self-update independent",
   "passed": true,
   "environment": {
@@ -14,7 +14,7 @@
   "checks": {
     "legacyMarkerPresent": true,
     "localFalseIgnoresLegacyMarker": true,
-    "sameByteRenameReboundBeforeNetworkCheck": true,
+    "sameByteOfficialReplacementReboundBeforeNetworkCheck": true,
     "manualVerificationMarkerCleared": true,
     "explicitLocalTrueRespected": true,
     "officialHttpSelfCheckSucceededWhileLocalTrue": true,
