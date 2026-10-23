@@ -27,6 +27,12 @@
 
 这些网络观察是一次性验证，不是监控或可用性 SLA。raw 文本 Range 的压缩表示问题仍存在于独立于 Release JAR 的路径，未宣称已修复。
 
+### 2026-10-23 公开 CI 首轮验收
+
+- [CI run 39953990440](https://github.com/davisye/update-folkways/actions/runs/39953990440) 在 Windows 与 Ubuntu 上完成 Java 21 构建、发布工具测试和真实 seed 首装烟测，发布 job 成功；源码为 `218b9f6fb741b103c847b78a9516035f03257f3d`。
+- 官方 nightly `0.1.0-nightly.6.1` 的六个附件经国内镜像下载后，全部与官方 GitHub API 返回的 digest/size 一致；清单和两个 JAR 均关联到该成功 run。
+- Windows 隔离实例使用发布的 seed 完成首次接管并启动真实前台 Java；默认 `localDevelopment=true` 时两个 JAR 摘要不变，runtime 与子进程门禁正常清理。该烟测没有启动 Minecraft 或真实世界。
+
 ## 仍需目标环境验收
 
 - 完整 Folkways 模组包、所选扩展及目标存档的升级后加载与存档重开。
