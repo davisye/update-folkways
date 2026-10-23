@@ -1,0 +1,25 @@
+.gradle/
+dist/
+**/build/
+**/run/
+**/__pycache__/
+.venv/
+*.pem
+*.key
+.folkways-updater/
+
+# Local fixtures, fetched upstream binaries, and verification scratch
+work/
+
+# Local credentials, deployment state, and diagnostics
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+.wrangler/
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.log

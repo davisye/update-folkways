@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: Java 21 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Select build identity
+        id: identity
+        shell: bash
+        run: python tools/self_release.py context --github-output "$GITHUB_OUTPUT"
+      - name: Build and test on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          BUILD_VERSION: ${{ steps.identity.outputs.version }}
+          BUILD_SEQUENCE: ${{ steps.identity.outputs.sequence }}
+          BUILD_CHANNEL: ${{ steps.identity.outputs.channel }}
+        run: >-
+          .\gradlew.bat build --console=plain
+          "-Pversion=$env:BUILD_VERSION" "-PbuildId=$env:GITHUB_SHA"
+          "-PrunId=$env:GITHUB_RUN_ID" "-PrunAttempt=$env:GITHUB_RUN_ATTEMPT"
+          "-PrunNumber=$env:GITHUB_RUN_NUMBER"
+          "-Psequence=$env:BUILD_SEQUENCE" "-Pchannel=$env:BUILD_CHANNEL"
+      - name: Build and test on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          BUILD_VERSION: ${{ steps.identity.outputs.version }}
+          BUILD_SEQUENCE: ${{ steps.identity.outputs.sequence }}
+          BUILD_CHANNEL: ${{ steps.identity.outputs.channel }}
+        run: |
+          chmod +x gradlew
+          ./gradlew build --console=plain \
+            "-Pversion=$BUILD_VERSION" "-PbuildId=$GITHUB_SHA" \
+            "-PrunId=$GITHUB_RUN_ID" "-PrunAttempt=$GITHUB_RUN_ATTEMPT" \
+            "-PrunNumber=$GITHUB_RUN_NUMBER" \
+            "-Psequence=$BUILD_SEQUENCE" "-Pchannel=$BUILD_CHANNEL"
+      - name: Publisher and self-release tests
+        run: python -m unittest discover -s tests/publisher -v
+      - name: Assemble and verify exactly two updater JARs and two seed launchers
+        run: python tools/self_release.py prepare --output dist
+      - name: Smoke actual seed installation and foreground JVM offline
+        run: python tools/seed_smoke.py --directory dist
+      - name: Upload candidate assets from this run
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: updater-release-${{ runner.os }}-${{ github.run_attempt }}
+          path: dist/
+          retention-days: 2
+          if-no-files-found: error
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports-${{ runner.os }}-${{ github.run_attempt }}
+          path: |
+            updater-core/build/test-results/test/*.xml
+            companion/build/test-results/test/*.xml
+          retention-days: 3
+          if-no-files-found: warn
+
+  release:
+    name: Publish verified updater
+    needs: verify
+    if: >-
+      github.repository == 'davisye/update-folkways' &&
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: updater-release-${{ github.ref == 'refs/heads/main' && 'nightly' || github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Use publication tools from trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: updater-release-Linux-${{ github.run_attempt }}
+          path: dist/
+      - name: Verify candidate files before publication
+        run: python tools/self_release.py verify --directory dist
+      - name: Publish metadata last and verify GitHub-generated asset digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/self_release.py publish --directory dist

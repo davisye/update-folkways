@@ -1,0 +1,41 @@
+name: 问题报告 / Bug report
+description: 报告可复现的行为或恢复问题。安全漏洞请私密报告。
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞请使用 https://github.com/davisye/update-folkways/security/advisories/new 。不要填写 token、会话参数、私人路径或玩家数据。
+  - type: input
+    id: version
+    attributes:
+      label: 更新器版本 / Updater version
+      description: 发布版本或完整提交；请注明是否本地构建。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境 / Environment
+      description: 系统、Java、NeoForge 版本，客户端或专服，源仓库/渠道/模块，开发模式开关。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Reproduction
+      description: 使用临时实例时如何最小复现？
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际 / Expected and actual
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏日志 / Redacted evidence
+      description: 只提供相关错误片段，说明实例是否已经退出。无需上传整个实例。
+      render: text

@@ -1,0 +1,23 @@
+name: 功能建议 / Feature request
+description: 描述目标、使用场景与验收标准。
+title: "[Feature] "
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 希望解决什么问题？ / Goal
+      description: 描述实际场景、当前行为和预期结果。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案 / Proposal
+      description: 可以描述界面或用法、兼容性，以及失败时应如何恢复。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 如何验证？ / Acceptance criteria
+      description: 哪些可观察结果说明问题已解决？

@@ -1,0 +1,31 @@
+dependencies { api 'com.google.code.gson:gson:2.10.1' }
+
+def updaterBuildInfo = layout.buildDirectory.dir('generated/updaterBuildInfo')
+tasks.register('generateUpdaterBuildInfo') {
+    def info = [schema: 1, repository: 'davisye/update-folkways', component: 'bootstrap',
+        version: project.version.toString(), commit: providers.gradleProperty('buildId').getOrElse('local'),
+        runId: providers.gradleProperty('runId').getOrElse(''),
+        runNumber: providers.gradleProperty('runNumber').getOrElse('0').toLong(),
+        runAttempt: providers.gradleProperty('runAttempt').getOrElse('0').toInteger(),
+        sequence: providers.gradleProperty('sequence').getOrElse('0').toLong(),
+        channel: providers.gradleProperty('channel').getOrElse('local'), minecraft: '1.21.1']
+    inputs.properties(info)
+    outputs.dir(updaterBuildInfo)
+    doLast {
+        def target = updaterBuildInfo.get().file('META-INF/folkways-updater-build.json').asFile
+        target.parentFile.mkdirs()
+        target.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(info)) + '\n'
+    }
+}
+sourceSets.main.resources.srcDir(updaterBuildInfo)
+tasks.named('processResources') { dependsOn 'generateUpdaterBuildInfo' }
+tasks.register('bootstrapJar', Jar) {
+    archiveBaseName = 'folkways-bootstrap'
+    archiveClassifier = 'standalone'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'dev.davisye.folkways.update.core.Bootstrap' }
+    from sourceSets.main.output
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}
+tasks.named('assemble') { dependsOn 'bootstrapJar' }

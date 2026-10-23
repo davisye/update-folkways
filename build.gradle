@@ -1,0 +1,36 @@
+plugins {
+    id 'base'
+    id 'net.neoforged.moddev' version '2.0.141' apply false
+}
+def requestedVersion = providers.gradleProperty('version').getOrElse('0.1.0-dev')
+def requestedCommit = providers.gradleProperty('buildId').getOrElse('local')
+def requestedRunNumber = providers.gradleProperty('runNumber').getOrElse('0')
+allprojects {
+    group = 'dev.davisye.folkways.update'
+    version = requestedVersion
+    repositories { mavenCentral() }
+}
+subprojects {
+    apply plugin: 'java-library'
+    java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = 21
+    }
+    dependencies {
+        testImplementation platform('org.junit:junit-bom:5.11.4')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+    tasks.withType(Test).configureEach { useJUnitPlatform() }
+    tasks.withType(Jar).configureEach {
+        manifest {
+            attributes 'Implementation-Version': project.version,
+                       'Implementation-Build': requestedCommit,
+                       'Implementation-Run-Number': requestedRunNumber
+        }
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+}
+tasks.named('build') { dependsOn ':updater-core:build', ':companion:build' }

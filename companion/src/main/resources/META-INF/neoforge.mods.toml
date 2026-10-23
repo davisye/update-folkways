@@ -1,0 +1,23 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="folkways_updater"
+version="${version}"
+displayName="Folkways Development Updater"
+description='''Stages signed Folkways development updates for an external bootstrap supervisor.'''
+
+[[dependencies.folkways_updater]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.233,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.folkways_updater]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"

@@ -1,0 +1,46 @@
+plugins { id 'net.neoforged.moddev' }
+neoForge {
+    version = '21.1.233'
+    mods {
+        folkways_updater {
+            sourceSet sourceSets.main
+            sourceSet project(':updater-core').sourceSets.main
+        }
+    }
+    runs {
+        server { server(); programArgument '--nogui' }
+        client { client() }
+    }
+}
+dependencies { implementation project(':updater-core') }
+
+def updaterBuildInfo = layout.buildDirectory.dir('generated/updaterBuildInfo')
+tasks.register('generateUpdaterBuildInfo') {
+    def info = [schema: 1, repository: 'davisye/update-folkways', component: 'companion',
+        version: project.version.toString(), commit: providers.gradleProperty('buildId').getOrElse('local'),
+        runId: providers.gradleProperty('runId').getOrElse(''),
+        runNumber: providers.gradleProperty('runNumber').getOrElse('0').toLong(),
+        runAttempt: providers.gradleProperty('runAttempt').getOrElse('0').toInteger(),
+        sequence: providers.gradleProperty('sequence').getOrElse('0').toLong(),
+        channel: providers.gradleProperty('channel').getOrElse('local'), minecraft: '1.21.1']
+    inputs.properties(info)
+    outputs.dir(updaterBuildInfo)
+    doLast {
+        def target = updaterBuildInfo.get().file('META-INF/folkways-updater-build.json').asFile
+        target.parentFile.mkdirs()
+        target.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(info)) + '\n'
+    }
+}
+sourceSets.main.resources.srcDir(updaterBuildInfo)
+tasks.named('processResources') {
+    dependsOn 'generateUpdaterBuildInfo'
+    inputs.property('modVersion', project.version.toString())
+    filesMatching('META-INF/neoforge.mods.toml') { expand(version: project.version.toString()) }
+}
+tasks.named('jar') {
+    archiveBaseName = 'folkways-updater-neoforge-1.21.1'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from project(':updater-core').sourceSets.main.output
+    dependsOn ':updater-core:classes'
+}
+tasks.withType(JavaExec).configureEach { standardInput = System.in }
