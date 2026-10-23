@@ -75,22 +75,25 @@ class DropInUpdaterTest {
         assertTrue(Files.exists(game.resolve(".folkways-updater/last-install.json")));
         assertThrows(IOException.class, () -> DropInUpdater.guardGame(game)); // This JVM predates the installation.
     }
-    @Test void existingConfigIsPreservedAndLocalCiIdentityProtectsBeforeNetwork() throws Exception {
+    @Test void existingConfigIsPreservedWhileLocalCiBuildCanSelfUpgrade() throws Exception {
         Files.createDirectories(game.resolve("mods")); Updater.initialize(game);
         Config config = Config.load(game); config.commandsEnabled = true; Files.writeString(game.resolve(".folkways-updater/config.json"), Updater.JSON.toJson(config));
         byte[] configBefore = Files.readAllBytes(game.resolve(".folkways-updater/config.json"));
         upstream = new SelfUpdaterTest(); SelfUpdater.Metadata build = upstream.metadata(1); build.runId = ""; build.runNumber = 0; build.runAttempt = 0; build.sequence = 0; build.commit = "local"; build.channel = "local";
-        Files.write(mod(), companion(build)); upstream.publish(2);
+        Files.write(mod(), companion(build)); publish(2);
         updater = DropInUpdater.initialize(game, mod(), upstream.source());
         assertArrayEquals(configBefore, Files.readAllBytes(game.resolve(".folkways-updater/config.json")));
-        local(false); assertTrue(updater.checkAndStage().contains("Locally compiled")); assertEquals(0, upstream.officialCalls);
+        assertTrue(updater.checkAndStage().contains("downloaded")); assertTrue(upstream.officialCalls > 0);
     }
-    @Test void freshLocalBuildDefaultsToProtectedModeEvenWithoutAnyExistingConfiguration() throws Exception {
+    @Test void freshLocalBuildDoesNotEnableDevelopmentAndCanSelfUpgrade() throws Exception {
         Files.createDirectories(game.resolve("mods")); upstream = new SelfUpdaterTest(); SelfUpdater.Metadata build = upstream.metadata(1);
-        build.runId = ""; build.runNumber = 0; build.runAttempt = 0; build.sequence = 0; build.commit = "local"; build.channel = "local";
-        Files.write(mod(), companion(build)); upstream.publish(2);
+        build.runId = ""; build.runNumber = 0; build.runAttempt = 0; build.sequence = Long.MAX_VALUE; build.commit = "local"; build.channel = "local";
+        Files.write(mod(), companion(build)); publish(2);
         updater = DropInUpdater.initialize(game, mod(), upstream.source());
-        assertTrue(Config.load(game).localDevelopment); assertTrue(updater.checkAndStage().contains("Local development")); assertEquals(0, upstream.officialCalls);
+        assertFalse(Config.load(game).localDevelopment); assertFalse(updater.localProtection());
+        assertEquals(0, Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class).highest);
+        assertTrue(updater.checkAndStage().contains("downloaded")); deadGame(); updater.applyOffline();
+        assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
     }
     @Test void badDigestFailedCiDuplicateAssetAndDowngradeNeverChangeLiveOrOldQueue() throws Exception {
         fixture(); updater.checkAndStage(); byte[] proof = Files.readAllBytes(queued().resolve("proof.json"));
@@ -104,11 +107,11 @@ class DropInUpdaterTest {
         assertThrows(IOException.class, updater::checkAndStage);
         assertArrayEquals(proof, Files.readAllBytes(queued().resolve("proof.json"))); assertArrayEquals(original, Files.readAllBytes(mod()));
     }
-    @Test void localModeToggledDuringDownloadPreservesOldQueueAndBlocksOfflineReplacement() throws Exception {
+    @Test void localModeToggledDuringDownloadDoesNotBlockSelfReplacement() throws Exception {
         fixture(); updater.checkAndStage(); byte[] proof = Files.readAllBytes(queued().resolve("proof.json")); publish(3);
         upstream.beforeAsset = ignored -> { try { local(true); } catch (Exception e) { throw new RuntimeException(e); } };
-        assertThrows(IOException.class, updater::checkAndStage); assertArrayEquals(proof, Files.readAllBytes(queued().resolve("proof.json")));
-        deadGame(); assertTrue(updater.applyOffline().contains("Local development")); assertArrayEquals(original, Files.readAllBytes(mod()));
+        assertTrue(updater.checkAndStage().contains("downloaded")); assertFalse(Arrays.equals(proof, Files.readAllBytes(queued().resolve("proof.json"))));
+        deadGame(); updater.applyOffline(); assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
     }
     @Test void detectsLocalReplacementAndRenamedDuplicateRatherThanSilentlyTakingOwnership() throws Exception {
         fixture(); Files.write(game.resolve("mods/renamed-local.jar"), original);
@@ -116,26 +119,72 @@ class DropInUpdaterTest {
         byte[] changed = original.clone(); changed[10] ^= 1; Files.write(mod(), changed);
         assertThrows(IOException.class, updater::checkAndStage);
         DropInUpdater manual = DropInUpdater.initialize(game, mod(), upstream.source());
-        assertTrue(manual.checkAndStage().contains("Manual/local"));
+        assertTrue(manual.checkAndStage().contains("downloaded"));
     }
     @Test void anExistingManagedInstallCanRunAnExplicitLocalRebuildWithoutResettingOwnership() throws Exception {
         fixture(); byte[] baseline = Files.readAllBytes(state()); local(true);
         SelfUpdater.Metadata local = upstream.metadata(1); local.commit = "local"; local.runId = ""; local.runNumber = 0; local.sequence = 0; local.runAttempt = 0; local.channel = "local";
         byte[] replacement = companion(local); Files.write(mod(), replacement);
         DropInUpdater development = DropInUpdater.initialize(game, mod(), upstream.source());
-        assertArrayEquals(baseline, Files.readAllBytes(state())); assertTrue(development.checkAndStage().contains("Local development"));
+        assertArrayEquals(baseline, Files.readAllBytes(state())); assertTrue(development.checkAndStage().contains("downloaded"));
         assertTrue(Files.exists(game.resolve(".folkways-updater/dropin-unmanaged.json")));
-        deadGame(); assertTrue(development.applyOffline().contains("files retained")); assertArrayEquals(replacement, Files.readAllBytes(mod()));
+        deadGame(); development.applyOffline(); assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
     }
-    @Test void manualOfficialVersionFilenameCanRunProtectedAndOriginalBaselineCanBeRestored() throws Exception {
+    @Test void manualOfficialVersionIsVerifiedBeforeRebaselineAndHighWaterNeverFalls() throws Exception {
         fixture(); byte[] baseline = Files.readAllBytes(state()); Path replacement = game.resolve("mods/folkways-updater-new-official.jar");
         Files.delete(mod()); byte[] newer = companion(upstream.metadata); Files.write(replacement, newer);
         DropInUpdater manual = DropInUpdater.initialize(game, replacement, upstream.source());
-        assertArrayEquals(baseline, Files.readAllBytes(state())); assertTrue(manual.checkAndStage().contains("Manual/local"));
+        assertArrayEquals(baseline, Files.readAllBytes(state())); assertTrue(manual.checkAndStage().contains("already current"));
+        DropInUpdater.State accepted = Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class);
+        assertEquals(2001, accepted.highest); assertEquals("mods/folkways-updater-new-official.jar", accepted.owned.path);
         deadGame(); manual.applyOffline(); assertArrayEquals(newer, Files.readAllBytes(replacement));
         Files.delete(replacement); Files.write(mod(), original);
         DropInUpdater restored = DropInUpdater.initialize(game, mod(), upstream.source());
-        assertFalse(Files.exists(game.resolve(".folkways-updater/dropin-unmanaged.json"))); assertTrue(restored.checkAndStage().contains("downloaded"));
+        assertTrue(restored.checkAndStage().contains("downloaded"));
+        assertEquals(2001, Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class).highest);
+    }
+    @Test void exactBytesRenameRebindsWithoutNetworkAndPreservesLegacyHighWater() throws Exception {
+        fixture(); DropInUpdater.State before = Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class);
+        before.highestSha256 = null; Files.writeString(state(), Updater.JSON.toJson(before));
+        Path renamed = game.resolve("mods/manually-renamed.jar"); Files.move(mod(), renamed); upstream.offline = true;
+        DropInUpdater renamedUpdater = DropInUpdater.initialize(game, renamed, upstream.source());
+        DropInUpdater.State after = Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class);
+        assertEquals(before.highest, after.highest); assertEquals(before.owned.sha256, after.owned.sha256);
+        assertEquals("mods/manually-renamed.jar", after.owned.path); assertEquals(0, upstream.officialCalls);
+        assertFalse(Files.exists(game.resolve(".folkways-updater/dropin-unmanaged.json")));
+        assertFalse(renamedUpdater.localProtection());
+    }
+    @Test void missingHistoricalManualEvidenceStillAllowsVerifiedLatestReplacement() throws Exception {
+        fixture(); Files.write(mod(), companion(upstream.metadata(3))); publish(4);
+        DropInUpdater manual = DropInUpdater.initialize(game, mod(), upstream.source());
+        assertTrue(manual.checkAndStage().contains("downloaded"));
+        DropInUpdater.Proof proof = Updater.JSON.fromJson(Files.readString(queued().resolve("proof.json")), DropInUpdater.Proof.class);
+        assertNotNull(proof.observed); assertEquals(3001, proof.observed.build.sequence);
+        deadGame(); manual.applyOffline(); assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
+    }
+    @Test void selfVerificationOfflineAndStaleSelfQueueDoNotBlockFolkwaysOrExitHelper() throws Exception {
+        UpdaterTest folkways = new UpdaterTest(); folkways.game = game; folkways.fixture(); folkways.updater.checkAndStage();
+        fixture(); updater.checkAndStage(); Files.write(mod(), companion(upstream.metadata(3)));
+        DropInUpdater manual = DropInUpdater.initialize(game, mod(), upstream.source()); upstream.offline = true;
+        assertTrue(manual.checkAndStage().startsWith("Updater verification temporarily unavailable")); assertFalse(manual.localProtection());
+        assertTrue(manual.startHelper().contains("ready")); assertTrue(manual.helperAlive()); stopHelper(manual);
+        deadGame(); assertTrue(manual.applyOffline().contains("deferred"));
+        assertArrayEquals(folkways.fresh.get("core"), folkways.installed("core"));
+        assertTrue(Files.exists(queued()), "A stale self queue is deferred, not discarded or installed against changed bytes");
+    }
+    @Test void selfInstallsWhileLocalButtonKeepsFolkwaysQueueAndFilesUntouched() throws Exception {
+        UpdaterTest folkways = new UpdaterTest(); folkways.game = game; folkways.fixture(); folkways.updater.checkAndStage();
+        byte[] oldCore = folkways.installed("core"), folkwaysProof = Files.readAllBytes(game.resolve(".folkways-updater/pending/manifest.json"));
+        fixture(); updater.checkAndStage(); local(true); Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "historical");
+        deadGame(); updater.applyOffline();
+        assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
+        assertArrayEquals(oldCore, folkways.installed("core")); assertArrayEquals(folkwaysProof, Files.readAllBytes(game.resolve(".folkways-updater/pending/manifest.json")));
+    }
+    @Test void unfinishedOwnJournalBlocksChecksBeforeTheyChangePendingOrState() throws Exception {
+        fixture(); updater.checkAndStage(); byte[] before = Files.readAllBytes(state()), proof = Files.readAllBytes(queued().resolve("proof.json"));
+        Files.writeString(game.resolve(".folkways-updater/dropin-journal.json"), "{}"); publish(3);
+        assertThrows(IOException.class, updater::checkAndStage); assertArrayEquals(before, Files.readAllBytes(state()));
+        assertArrayEquals(proof, Files.readAllBytes(queued().resolve("proof.json")));
     }
     @Test void hiddenHelperMustMatchTheOuterBuildAndCannotBeSwapped() throws Exception {
         fixture(); Map<String,byte[]> bad = entries(companion(upstream.metadata)); bad.put(RESOURCE, helper(upstream.metadata(4)));
@@ -156,9 +205,11 @@ class DropInUpdaterTest {
         assertThrows(IOException.class, () -> DropInUpdater.guardGame(game));
         assertFalse(Files.exists(game.resolve(".folkways-updater/dropin-runtime")), "Legacy recovery must not repeatedly spawn an unsupported helper");
     }
-    @Test void ideMarkerProtectsAHelperThatWasAlreadyQueued() throws Exception {
-        fixture(); updater.checkAndStage(); DropInUpdater.guardGame(game, true); deadGame();
-        assertTrue(updater.applyOffline().contains("Local development")); assertArrayEquals(original, Files.readAllBytes(mod()));
+    @Test void ideFlagAndHistoricalMarkerDoNotEnableDevelopmentOrBlockSelfUpdate() throws Exception {
+        fixture(); updater.checkAndStage(); Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "historical");
+        DropInUpdater.guardGame(game, true); assertFalse(updater.localProtection()); deadGame(); updater.applyOffline();
+        assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
+        assertEquals("historical", Files.readString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT")));
     }
     @Test void incompleteTransactionRejectsThisLoadButStartsRecoveryWaitingForThisJvm() throws Exception {
         fixture(); updater.checkAndStage();
@@ -173,6 +224,28 @@ class DropInUpdaterTest {
             assertThrows(IOException.class, () -> DropInUpdater.guardGame(game));
             assertTrue(updater.helperAlive()); assertArrayEquals(next, Files.readAllBytes(mod())); // Parent is still alive.
         } finally { if (updater.helperAlive()) stopHelper(updater); }
+    }
+    @Test void localButtonDoesNotBlockOfflineOwnJournalRecoveryOrLowerAcceptedHighWater() throws Exception {
+        fixture(); updater.checkAndStage(); local(true);
+        DropInUpdater.State before = Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class); before.pending = null;
+        DropInUpdater.Journal journal = new DropInUpdater.Journal(); journal.before = before;
+        journal.after = Updater.JSON.fromJson(Updater.JSON.toJson(before), DropInUpdater.State.class);
+        byte[] next = Files.readAllBytes(queued().resolve("mod.jar"));
+        journal.after.owned = new SelfUpdater.Owned(before.owned.path, Updater.sha(next), next.length);
+        journal.after.build = SelfUpdater.jar(next, "companion", null); journal.after.highest = journal.after.build.sequence;
+        journal.after.highestSha256 = Updater.sha(next);
+        Files.write(game.resolve(".folkways-updater/dropin-backup.jar"), original);
+        Files.writeString(game.resolve(".folkways-updater/dropin-journal.json"), Updater.JSON.toJson(journal)); Files.write(mod(), next);
+        Path folkwaysQueue = game.resolve(".folkways-updater/github-folkways-pending/plan.json");
+        Files.createDirectories(folkwaysQueue.getParent()); Files.writeString(folkwaysQueue, "local-mode-queued-sentinel");
+        Path localFolkways = game.resolve("mods/local-folkways-build.jar"); byte[] localBytes = UpdaterTest.jar("core", "local-build"); Files.write(localFolkways, localBytes);
+        upstream.offline = true; deadGame(); updater.applyOffline();
+        DropInUpdater.State recovered = Updater.JSON.fromJson(Files.readString(state()), DropInUpdater.State.class);
+        assertArrayEquals(original, Files.readAllBytes(mod())); assertEquals(2001, recovered.highest);
+        assertEquals(Updater.sha(next), recovered.highestSha256); assertNull(recovered.pending);
+        assertFalse(Files.exists(game.resolve(".folkways-updater/dropin-journal.json")));
+        assertTrue(Files.exists(game.resolve(".folkways-updater/last-install.json"))); assertTrue(Config.load(game).localDevelopment);
+        assertEquals("local-mode-queued-sentinel", Files.readString(folkwaysQueue)); assertArrayEquals(localBytes, Files.readAllBytes(localFolkways));
     }
     @Test void aNewGameLeaseBetweenFolkwaysFilesStopsFurtherWritesAndAutomaticRollback() throws Exception {
         UpdaterTest folkways = new UpdaterTest(); folkways.game = game; folkways.fixture(); folkways.updater.checkAndStage();
@@ -224,12 +297,12 @@ class DropInUpdaterTest {
         assertFalse(Files.exists(queued())); assertFalse(Files.exists(game.resolve(".folkways-updater/dropin-journal.json")));
         assertTrue(Files.exists(game.resolve(".folkways-updater/last-install.json")));
     }
-    @Test void actualJvmLocalPropertyAlsoProtectsExistingAndNewExitHelpers() throws Exception {
+    @Test void actualJvmLocalPropertyDoesNotOverrideTheButtonOrBlockSelfUpdate() throws Exception {
         fixture(); updater.checkAndStage(); deadGame();
         Path bootstrap = game.resolve("probe-bootstrap.jar"); Files.write(bootstrap, helper(upstream.metadata(1)));
-        probe(bootstrap, true); assertArrayEquals(original, Files.readAllBytes(mod()));
-        assertTrue(Files.exists(queued())); assertTrue(Files.exists(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT")));
-        assertTrue(updater.localProtection());
+        probe(bootstrap, true); assertArrayEquals(upstream.downloads.get(upstream.metadata.artifacts.get(1).url), Files.readAllBytes(mod()));
+        assertFalse(Files.exists(queued())); assertFalse(Files.exists(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT")));
+        assertFalse(updater.localProtection());
     }
     Map<?,?> probe(Path bootstrap) throws Exception { return probe(bootstrap, false); }
     Map<?,?> probe(Path bootstrap, boolean property) throws Exception {

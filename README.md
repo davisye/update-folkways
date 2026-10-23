@@ -50,26 +50,25 @@ flowchart TD
     B --> C[登记 JVM，检查安装门禁]
     C --> D[检查、提示、预下载]
     D --> E[后台 helper 等整个 JVM 退出]
-    E --> F[复查进程、开发保护与文件归属]
+    E --> F[复查进程、通道开关与文件归属]
     F --> G[安装并记录完成，清理缓存]
     G --> H[下次照常启动，加载新版本]
 ```
 
 运行中不覆盖已加载的 JAR。若你重开游戏恰好与安装重叠，安装门禁可能中止这次启动并提示重开，避免混代文件进入世界。Mod 构造阶段已经晚于部分加载器扫描；本项目不把这称为“扫描前更新”。[架构与边界](docs/audit.md) 说明了选择这个流程的原因。
 
-## 保留本地开发的主动权
+## 两个独立的更新开关
 
-官方发行 JAR 在**没有现有配置**的新实例中默认启用管理更新（`localDevelopment=false`）。已有配置原值保留，不会把以前开启的开发保护改成关闭。
+本地开发按钮只读取配置 `localDevelopment`。新配置默认 `false`，已有配置保留原值；源码构建、IDE、JVM 参数、环境变量和旧 `LOCAL_DEVELOPMENT` 文件都不会自动打开它。
 
-以下任一条件继续保护本地构建，不检查、预下载或替换：
+| 设置 | 作用 |
+| --- | --- |
+| `localDevelopment=true` | 暂停 Folkways 和依赖的检查、预下载、安装与恢复写入，保留本地编译的 Folkways |
+| `selfUpdateEnabled=true` | 独立启用更新器自身更新；本地开发开启时仍可检查、预下载，并在退出后安装或恢复 |
 
-- 配置 `localDevelopment=true`。
-- JVM 参数 `-Dfolkways.localDevelopment=true`。
-- 环境变量 `FOLKWAYS_LOCAL_DEVELOPMENT=true`。
-- 存在 `.folkways-updater/LOCAL_DEVELOPMENT` 文件。
-- NeoForge 非生产开发环境，或 updater 本身缺少官方 CI 构建身份。
+要同时保留自己编译的 updater，将 `selfUpdateEnabled` 设为 `false`。IDE 中没有已安装 updater JAR 时，自更新没有可替换目标；这不会自动改变本地开发开关。
 
-helper 安装前也会重查保护。人工重新编译或修改过的受管 JAR 与归属记录不符时，替换会停止。完整说明见 [配置指南](docs/configuration.md)。
+两个通道仍分别核对文件归属和来源。已登记 updater 仅改名且字节相同时可安全重绑定；手动换入官方新版后，校验官方摘要与 CI 身份才能恢复自身托管。这个校验不可用时，不会顺带关闭 Folkways。完整说明见 [配置指南](docs/configuration.md)。
 
 ## 更新来源与模块
 
@@ -94,7 +93,7 @@ Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一�
 | 命令 | 行为 |
 | --- | --- |
 | `/folkwaysupdate status` | 查看状态 |
-| `/folkwaysupdate check` | 手动请求后台检查和预下载，遵守开发保护 |
+| `/folkwaysupdate check` | 后台检查和预下载；两个更新通道分别遵守各自开关 |
 | `/shutdown [seconds]` | 默认 10 秒，范围 0–300 秒；正常停止和存档，集成服务器随后关闭客户端 |
 | `/shutdown cancel` / `/restart cancel` | 停止请求发出前取消倒计时 |
 | `/restart [seconds]` | 专服正常停止后，由 helper 重新启动整个 Java 进程；支持同样的倒计时与取消 |
@@ -108,7 +107,7 @@ Drop-in `/restart` 已在只安装 updater 的真实 NeoForge 专服中验证正
 python -m unittest discover -s tests/publisher -v
 ```
 
-Linux 使用 `./gradlew`。需要 Java 21 JDK、Python 3.11+；首次构建会下载依赖。源码构建与 NeoForge 开发环境保持开发保护。[贡献指南](CONTRIBUTING.md) 说明如何使用隔离测试实例。
+Linux 使用 `./gradlew`。需要 Java 21 JDK、Python 3.11+；首次构建会下载依赖。开发时请显式设置 `localDevelopment=true`；若也要保留自己编译的 updater，再设 `selfUpdateEnabled=false`。[贡献指南](CONTRIBUTING.md) 说明如何使用隔离测试实例。
 
 Windows/Linux [CI](https://github.com/davisye/update-folkways/actions/workflows/ci.yml)、实际单 JAR 安装验证、历史外部 seed 升级实验的范围分开记录在 [验证说明](docs/verification.md)，不把旧方式成功等同新方式已验收。
 
@@ -124,6 +123,6 @@ Windows/Linux [CI](https://github.com/davisye/update-folkways/actions/workflows/
 
 Drop one updater JAR into `mods/` and launch NeoForge 1.21.1 normally. The mod checks and stages downloads, then an embedded helper waits for the entire game JVM to exit before installing. The next launch loads the installed version; this does not guarantee the newest release before every startup scan.
 
-Official fresh installs use managed mode. The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. Existing settings, local builds, development environments, and explicit protection switches remain protected. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
+The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. Only `config.localDevelopment` pauses Folkways and dependency updates. Updater self-updates use the independent `selfUpdateEnabled` switch and continue in local-development mode. IDEs, source identity, environment variables, JVM flags, and legacy marker files do not enable that mode. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
 
 See [installation](docs/installation.md), [configuration](docs/configuration.md), and [verification limits](docs/verification.md). Drop-in restart was tested on an isolated NeoForge dedicated server with only this mod; a full Folkways pack, human players, and the Minecraft client were not tested. Full client restart remains unsupported.

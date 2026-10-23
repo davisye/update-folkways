@@ -6,7 +6,7 @@ license="MIT"
 modId="folkways_updater"
 version="${version}"
 displayName="Folkways Development Updater"
-description='''Install and update Folkways from a single Mod JAR. Configure in the Mods menu. Downloads are verified in the background and installed after the game fully exits, ready for the next launch. Local development mode protects locally compiled files.'''
+description='''Install and update Folkways from a single Mod JAR. Configure in the Mods menu. Downloads are verified in the background and installed after the game fully exits, ready for the next launch. Local development mode pauses Folkways and dependency updates; updater self-updates remain independent.'''
 
 [[dependencies.folkways_updater]]
 modId="neoforge"

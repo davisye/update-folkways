@@ -16,11 +16,11 @@
 
 ## 第一次运行会发生什么
 
-第一次加载你手工安装的 updater，登记其归属，并检查自身及 Folkways 更新。没有现有配置的官方发行版默认 `localDevelopment=false`；已存在的配置保持原值。本地源码构建、NeoForge 开发环境及显式开发保护继续禁用自动更新，包括前置依赖写入。
+第一次加载你手工安装的 updater，登记其归属，并检查自身及 Folkways 更新。没有现有配置时默认 `localDevelopment=false`；已存在的配置保持原值。源码构建、IDE、旧 JVM/env 参数和标记文件不会自动打开本地开发。
 
 下载通过验证后，游戏提示更新已准备。后台 helper 等待**整个游戏 JVM**退出，而不是只等待退出世界或集成服务器停止。你可以正常继续游戏，更新不会原地覆盖已加载文件。
 
-JVM 退出后，helper 重查其他游戏进程、开发保护、文件归属、待安装内容与事务状态，再安装。下一次照常启动即可加载新版本。
+JVM 退出后，helper 重查其他游戏进程、各通道开关、文件归属、待安装内容与事务状态，再安装。下一次照常启动即可加载新版本。
 
 需要更改仓库、渠道或模块时，在 **Mods → Folkways Development Updater → 配置** 修改。检查按钮会先保存，再在后台请求下载；主菜单可以显示状态与提示。无需为了触发首装先创建世界。
 
@@ -41,17 +41,18 @@ Create、Modular Golems 和 Cookery 扩展需要已有兼容前置。缺少前�
 - **刚退出又立即重开：** 若与 helper 安装重叠，进程/事务门禁可能中止这次启动。按提示等待安装完成后再开，避免混代文件进入世界。
 - **下载或官方 API 暂不可用：** 保留现有 updater。已加载版本可继续运行，后续再检查。
 - **系统关机或 helper 被终止：** 可能保留待更新或恢复状态；不能保证本次已安装，按下次提示处理。
-- **开发保护开启或受管 JAR 被手工改动：** 游戏仍可加载手工安装的完整 updater，但自动替换被保护，旧归属不静默重置。未完成事务或启动冲突仍会拦截加载。
+- **本地开发开启：** 暂停 Folkways 与依赖的检查、下载和安装；若自身更新开启，updater 仍可更新。
+- **手动更换 updater：** 同摘要改名可重新绑定；换入官方新版须验证官方摘要和 CI 身份后恢复自身托管。验证暂不可用时保留文件并提示，不顺带停用 Folkways。未完成事务或启动冲突仍会拦截加载。
 
 这个流程不控制启动器的扫描前时机，也不保证每次启动都已经是最新。中止启动的门禁是冲突保护，不应通过强删文件绕过。
 
 ## 本地开发
 
-保留/设置 `localDevelopment=true`，或创建 `.folkways-updater/LOCAL_DEVELOPMENT`。环境变量 `FOLKWAYS_LOCAL_DEVELOPMENT=true` 与 JVM 参数 `-Dfolkways.localDevelopment=true` 也可启用保护。
+需要保留自己编译的 Folkways 时，在配置页打开本地开发，即 `localDevelopment=true`。这也阻止退出 helper 安装或恢复 Folkways 及依赖。
 
-本地构建身份和 NeoForge 开发环境继续受保护，即使从前的配置是 managed 模式。修改配置后，helper 在安装前仍需重新检查保护。字段说明见 [配置指南](configuration.md)。
+updater 自身由 `selfUpdateEnabled` 独立控制；本地开发开启时仍可检查、预下载，并在退出后安装或恢复。若也要保留自己编译的 updater，主动关闭自身更新。字段与组合表见 [配置指南](configuration.md)。
 
-IDE、JVM `-D` 与环境变量保护会持久留下 `LOCAL_DEVELOPMENT` 标记，避免父进程退出后 helper 丢失开发设置。恢复 managed 需要关闭对应 flag、配置为 `false`，并在实例关闭后主动移除该标记；不能只改一个开关。
+IDE、源码身份、旧 JVM/env 设置和 `LOCAL_DEVELOPMENT` 文件不再覆盖配置，也不自动改变按钮。已有配置值保留；旧配置为 `true` 时只需在页面主动关闭，无需删除标记文件。
 
 ## 专服停止与重启
 

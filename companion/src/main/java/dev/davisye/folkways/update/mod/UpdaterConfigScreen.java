@@ -74,7 +74,7 @@ public final class UpdaterConfigScreen extends Screen {
             }, t("policy." + draft.networkPolicy)).setTooltip(Tooltip.create(t("network_help")));
             button("self", x + half + 6, y, content - half - 6, () -> {
                 draft.selfUpdateEnabled = !draft.selfUpdateEnabled; changed();
-            }, toggle(draft.selfUpdateEnabled));
+            }, toggle(draft.selfUpdateEnabled)).setTooltip(Tooltip.create(t("self_help")));
             y += 24;
             button("commands", x, y, half, () -> { draft.commandsEnabled = !draft.commandsEnabled; changed(); }, toggle(draft.commandsEnabled))
                     .setTooltip(Tooltip.create(t("commands_help")));
@@ -132,9 +132,10 @@ public final class UpdaterConfigScreen extends Screen {
                 current.selfUpdateChannel = draft.selfUpdateChannel;
                 current.regionHint = draft.regionHint;
             });
+            ClientUpdates.settingsSaved();
             feedback = check ? t(ClientUpdates.requestCheck() ? "requested" : "busy") : t("saved");
             feedbackUntil = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
-        } catch (Exception error) { feedback = t("save_error"); }
+        } catch (Exception error) { feedback = t("save_error"); feedbackUntil = Long.MAX_VALUE; }
     }
 
     @Override public void tick() {

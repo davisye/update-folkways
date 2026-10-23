@@ -120,18 +120,18 @@ class SelfUpdaterTest {
         assertTrue(new Updater(game).checkAndStage().contains("current NeoForge version"));
         assertTrue(updater.checkAndStage().contains("downloaded")); assertTrue(Files.exists(pending().resolve("metadata.json"))); assertOld();
     }
-    @Test void localConfigMarkerAndLocalBuildProtectBeforeNetwork() throws Exception {
-        fixture(); config.localDevelopment = true; saveConfig(); assertTrue(updater.checkAndStage().contains("Local development")); assertEquals(0, officialCalls);
-        config.localDevelopment = false; saveConfig(); Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "");
-        assertTrue(updater.prepare().contains("retained")); assertEquals(0, officialCalls); assertOld();
+    @Test void localConfigAndHistoricalMarkerDoNotBlockSelfUpdate() throws Exception {
+        fixture(); config.localDevelopment = true; saveConfig(); assertTrue(updater.checkAndStage().contains("downloaded"));
+        Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "historical");
+        assertTrue(updater.prepare().contains("Updater installed")); assertTrue(officialCalls > 0);
     }
-    @Test void localCiIdentityNeverGetsAutomaticallyReplaced() throws Exception {
+    @Test void localCiIdentityCanUpgradeToVerifiedOfficialBuild() throws Exception {
         Updater.initialize(game); config = new Config(); config.localDevelopment = false; saveConfig();
         Files.createDirectories(game.resolve(".folkways-updater/bin")); Files.createDirectories(game.resolve("mods"));
         SelfUpdater.Metadata local = metadata(1); local.sequence = 0; local.runNumber = 0; local.runId = ""; local.runAttempt = 0; local.channel = "local"; local.commit = "local";
         Files.write(bin(), jar(local, "bootstrap")); Files.write(companion(), jar(local, "companion"));
         publish(2); updater = new SelfUpdater(game, source(), game.resolve("copied-runner.jar")); updater.adopt(companion());
-        assertTrue(updater.checkAndStage().contains("Locally compiled")); assertEquals(0, officialCalls);
+        assertTrue(updater.checkAndStage().contains("downloaded")); assertTrue(officialCalls > 0);
     }
     @Test void runningInstalledBootstrapCannotOverwriteItself() throws Exception {
         fixture(); SelfUpdater direct = new SelfUpdater(game, source(), bin());
@@ -144,12 +144,12 @@ class SelfUpdaterTest {
             assertThrows(IOException.class, updater::prepare); assertOld();
         }
     }
-    @Test void partialDownloadOrMidDownloadLocalModeKeepsOldCompletePending() throws Exception {
+    @Test void badDownloadKeepsOldPendingButLocalToggleDoesNotBlockSelfUpdate() throws Exception {
         fixture(); updater.checkAndStage(); byte[] old = Files.readAllBytes(pending().resolve("metadata.json"));
         publish(3); corruptCompanion = true; assertThrows(IOException.class, updater::checkAndStage);
         assertArrayEquals(old, Files.readAllBytes(pending().resolve("metadata.json"))); assertOld();
         corruptCompanion = false; beforeAsset = url -> { if (url.contains("folkways-updater-neoforge")) { config.localDevelopment = true; try { saveConfig(); } catch (Exception e) { throw new RuntimeException(e); } } };
-        assertThrows(IOException.class, updater::checkAndStage); assertArrayEquals(old, Files.readAllBytes(pending().resolve("metadata.json"))); assertOld();
+        assertTrue(updater.checkAndStage().contains("downloaded")); assertFalse(Arrays.equals(old, Files.readAllBytes(pending().resolve("metadata.json")))); assertOld();
     }
     @Test void refusesMissingOfficialDigestWrongCiAndChangingReleases() throws Exception {
         fixture(); release.assets.getFirst().digest = null; assertThrows(IOException.class, updater::checkAndStage); assertOld();

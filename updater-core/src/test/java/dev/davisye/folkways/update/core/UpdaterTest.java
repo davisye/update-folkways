@@ -234,8 +234,9 @@ class UpdaterTest {
         assertEquals(List.of(mirror, direct), calls);
     }
 
-    @Test void defaultLocalDevelopmentNeverTouchesNetwork() throws Exception {
+    @Test void explicitLocalDevelopmentNeverTouchesFolkwaysNetwork() throws Exception {
         Updater.initialize(game);
+        Config.edit(game, c -> c.localDevelopment = true);
         AtomicInteger calls = new AtomicInteger();
         Updater u = new Updater(game, (url, max) -> { calls.incrementAndGet(); throw new IOException("network must not run"); });
         assertTrue(u.checkAndStage().startsWith("Local development")); assertEquals(0, calls.get());
@@ -243,8 +244,14 @@ class UpdaterTest {
         assertFalse(Files.exists(game.resolve("mods")));
     }
 
-    @Test void markerAfterPredownloadBlocksApply() throws Exception {
+    @Test void legacyMarkerDoesNotOverrideTheOffSwitchDuringFolkwaysApply() throws Exception {
         fixture(); updater.checkAndStage(); Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "");
+        assertTrue(updater.applyPending().startsWith("Installed"));
+        for (String module : config.modules) assertArrayEquals(fresh.get(module), installed(module));
+        assertFalse(Files.exists(pending()));
+    }
+    @Test void explicitSwitchAfterPredownloadRetainsTheFolkwaysQueue() throws Exception {
+        fixture(); updater.checkAndStage(); Config.edit(game, c -> c.localDevelopment = true);
         assertTrue(updater.applyPending().startsWith("Local development")); assertOld(); assertTrue(Files.exists(pending()));
     }
 

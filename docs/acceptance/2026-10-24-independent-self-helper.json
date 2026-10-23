@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "repository": "davisye/update-folkways",
+  "scenario": "independent self-update in local mode through the actual post-exit helper",
+  "policy": "config.localDevelopment only pauses Folkways/dependencies; selfUpdateEnabled independently controls self-updates",
+  "passed": true,
+  "environment": {
+    "platform": "Windows",
+    "java": 21,
+    "artifactIdentity": "0.1.0-ci.900.1",
+    "sequence": 900001,
+    "publicJarCount": 1,
+    "embeddedHelper": true
+  },
+  "checks": {
+    "localDevelopment": true,
+    "legacyMarkerPresent": true,
+    "selfUpdateInstalled": true,
+    "installedSha256": "cd9101ebe54b79c5038eedb13648701b7e4d69fed8956ab443812caf664ea5bb",
+    "acceptedSequence": 900001,
+    "folkwaysSentinelUnchanged": true,
+    "folkwaysPendingRetained": true,
+    "previousHelperCleaned": true,
+    "postExitHelperRuns": 3,
+    "scope": "offline previously verified queue; official API verification is covered by core tests"
+  },
+  "scope": "Actual current candidate bytecode and embedded helper with synthetic CI identity; offline fixture, not a public release or network verification",
+  "limits": {
+    "officialNetworkExercised": false,
+    "publicReleaseTested": false,
+    "minecraftStarted": false,
+    "powerLossDurabilityTested": false
+  }
+}

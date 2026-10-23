@@ -8,7 +8,7 @@
   "folkways_updater.config.local": "本地开发：%s",
   "folkways_updater.config.on": "开",
   "folkways_updater.config.off": "关",
-  "folkways_updater.config.local_help": "保护本地编译：停止所有下载与替换。即使此项关闭，IDE、环境变量和 LOCAL_DEVELOPMENT 标记仍会保护本地文件。",
+  "folkways_updater.config.local_help": "此开关仅暂停 Folkways 及前置的检查、下载与替换。更新器自身仍可更新。关闭后，旧开发标记和手动安装的更新器不会开启本地开发模式。",
   "folkways_updater.config.network": "网络：%s",
   "folkways_updater.config.policy.mirror-first": "镜像优先",
   "folkways_updater.config.policy.direct-first": "直连优先",
@@ -41,7 +41,7 @@
   "folkways_updater.config.save_error": "保存失败，请检查 config.json 和文件权限后重试。",
   "folkways_updater.status.idle": "启动 15 秒后自动检查；也可点“保存并检查”。",
   "folkways_updater.status.checking": "正在后台检查、校验并预下载…",
-  "folkways_updater.status.local": "本地开发保护已生效，停止下载与替换。",
+  "folkways_updater.status.local": "本地开发：仅暂停 Folkways 与前置更新。",
   "folkways_updater.status.config_error": "无法读取更新配置，已保留现有文件。",
   "folkways_updater.status.self_error": "更新器自检查暂不可用，保留当前版本。",
   "folkways_updater.status.folkways_error": "Folkways 检查失败，请检查官方 API 网络、所选频道、已有文件和前置依赖；已保留现有文件。",
@@ -53,5 +53,9 @@
   "folkways_updater.status.self_current": "更新器已是最新。",
   "folkways_updater.status.self_ready": "更新器已预下载，完全退出游戏后安装。",
   "folkways_updater.status.self_disabled": "更新器自更新已关闭。",
-  "folkways_updater.status.official_unavailable": "无法连接官方 GitHub API 完成校验。请检查 API 网络；仅镜像附件可下载时仍会等待。"
+  "folkways_updater.status.official_unavailable": "无法连接官方 GitHub API 完成校验。请检查 API 网络；仅镜像附件可下载时仍会等待。",
+  "folkways_updater.config.self_help": "控制更新器自身的更新，独立于本地开发开关。开启本地开发时也照常自更新。",
+  "folkways_updater.status.self_no_target": "此 IDE 运行没有已安装的更新器 JAR 可替换。",
+  "folkways_updater.status.self_verification_unavailable": "更新器官方校验暂不可用，已保留当前版本；Folkways 按其配置继续检查。",
+  "folkways_updater.status.settings_changed": "设置已生效；Folkways 与更新器自身将按各自开关检查。"
 }
