@@ -24,7 +24,7 @@ public final class Transport implements Updater.Fetcher {
         URI u;
         try { u = URI.create(url); } catch (RuntimeException e) { throw new IOException("Invalid URL", e); }
         if (!"https".equals(u.getScheme()) || u.getUserInfo() != null || u.getFragment() != null || (u.getPort() != -1 && u.getPort() != 443)
-            || (!GITHUB.contains(u.getHost()) && !Set.of("github.davisye.cn", "pan.davisye.cn").contains(u.getHost()))) throw new IOException("Unapproved public HTTPS URL");
+            || (!GITHUB.contains(u.getHost()) && !Set.of("github.davisye.cn", "pan.davisye.cn", "api.modrinth.com", "cdn.modrinth.com").contains(u.getHost()))) throw new IOException("Unapproved public HTTPS URL");
         return u;
     }
 
@@ -39,6 +39,16 @@ public final class Transport implements Updater.Fetcher {
     byte[] fetchOfficialApi(String url, long maximum) throws Exception {
         URI uri = safeUri(url);
         if (!"api.github.com".equals(uri.getHost()) || !uri.getPath().startsWith("/repos/davisye/update-folkways/")) throw new IOException("Self-update API source is fixed");
+        return officialJson(uri, maximum);
+    }
+    byte[] fetchFolkwaysApi(String url, long maximum) throws Exception {
+        URI uri = safeUri(url);
+        boolean github = "api.github.com".equals(uri.getHost()) && (uri.getPath().startsWith("/repos/IzakyL/folkways/") || uri.getPath().startsWith("/repos/davisye/folkways/"));
+        boolean modrinth = "api.modrinth.com".equals(uri.getHost()) && uri.getPath().equals("/v2/version/bpcbGDy4") && uri.getRawQuery() == null;
+        if (!github && !modrinth) throw new IOException("Unsupported official Folkways/dependency API");
+        return officialJson(uri, maximum);
+    }
+    private byte[] officialJson(URI uri, long maximum) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12))
             .header("User-Agent", "folkways-bootstrap/0.1").header("Accept", "application/vnd.github+json").GET().build();
         HttpResponse<byte[]> response = client.send(request, ignored -> new LimitedBody(maximum));

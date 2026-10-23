@@ -75,7 +75,7 @@ public final class AutomaticRestart {
         TimeUnit.SECONDS.sleep(c.restartCooldownSeconds);
         u.locked(() -> {
             RuntimeLease.ensureNoGame(u);
-            for (String journal : List.of("journal.json", "dropin-journal.json", "self-journal.json")) {
+            for (String journal : List.of("journal.json", "github-folkways-journal.json", "dropin-journal.json", "self-journal.json")) {
                 Path p = u.home.resolve(journal); u.safe(p);
                 if (Files.exists(p)) throw new IOException("Unfinished update transaction; restart refused");
             }

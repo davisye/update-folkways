@@ -18,16 +18,23 @@ public final class Updater {
     static final Set<String> MODULES = Set.of("core", "vanilla", "create", "modulargolems", "cookery");
     final Path game, home, mods;
     private final Fetcher injected;
+    final String loaderVersion;
+    GitHubFolkways.Source githubSource;
     interface InstallGate { void check() throws Exception; void committed() throws Exception; }
     InstallGate installGate;
     private void installCheck() throws Exception { if (installGate != null) installGate.check(); }
     private void installCommitted() throws Exception { if (installGate != null) installGate.committed(); }
 
-    public Updater(Path gameDir) throws IOException { this(gameDir, null); }
+    public Updater(Path gameDir) throws IOException { this(gameDir, (Fetcher)null); }
+    public Updater(Path gameDir, String loaderVersion) throws IOException { this(gameDir, null, loaderVersion); }
     Updater(Path gameDir, Fetcher injected) throws IOException {
+        this(gameDir, injected, null);
+    }
+    private Updater(Path gameDir, Fetcher injected, String loaderVersion) throws IOException {
         game = gameDir.toAbsolutePath().normalize().toRealPath();
         home = game.resolve(".folkways-updater"); mods = game.resolve("mods"); this.injected = injected;
         safe(home); safe(mods);
+        this.loaderVersion = loaderVersion;
     }
 
     public static void initialize(Path gameDir) throws IOException {
@@ -39,8 +46,9 @@ public final class Updater {
     public String status() throws IOException {
         Config c = Config.load(game);
         return "mode=" + (c.isLocalDevelopment(game) ? "local-development (replacement disabled)" : "managed")
-            + ", source=" + c.scope() + ", pending=" + Files.exists(home.resolve("pending/manifest.json"))
-            + ", recovery=" + Files.exists(home.resolve("journal.json"));
+            + ", source=" + c.scope() + (c.manifestUrl.isBlank() ? " (official GitHub)" : " (signed manifest)")
+            + ", pending=" + (Files.exists(home.resolve("pending/manifest.json")) || Files.exists(home.resolve("github-folkways-pending/plan.json")))
+            + ", recovery=" + (Files.exists(home.resolve("journal.json")) || Files.exists(home.resolve(GitHubFolkways.JOURNAL)));
     }
 
     /** Explicit ownership baseline; never silently adopts newly copied developer jars. */
@@ -66,9 +74,10 @@ public final class Updater {
     public String checkAndStage() throws Exception {
         Config c = Config.load(game);
         if (c.isLocalDevelopment(game)) return "Local development: update check and replacement disabled";
-        if (c.manifestUrl.isBlank()) return "No signed manifest URL configured";
+        if (c.manifestUrl.isBlank()) return new GitHubFolkways(this).checkAndStage(c);
         return locked(() -> {
             requireManaged(c);
+            if (Files.exists(home.resolve(GitHubFolkways.JOURNAL))) throw new IOException("Recover the official GitHub transaction before changing channels");
             restorePendingSwap(c);
             if (Files.exists(home.resolve("journal.json"))) throw new IOException("Interrupted transaction requires bootstrap recovery");
             State s = state(); validateOwned(s, c);
@@ -121,6 +130,8 @@ public final class Updater {
     /** Package-private: only Bootstrap, while holding its lifetime session lock, calls this. */
     String applyPending() throws Exception {
         Config c = Config.load(game);
+        if (c.manifestUrl.isBlank()) return new GitHubFolkways(this).apply(c);
+        if (Files.exists(home.resolve(GitHubFolkways.JOURNAL))) throw new IOException("An official GitHub installation requires recovery before switching to a signed manifest");
         if (c.isLocalDevelopment(game)) {
             if (Files.exists(home.resolve("journal.json"))) throw new IOException("Local-development mode blocks recovery writes; resolve interrupted transaction manually");
             return "Local development: replacement disabled";
@@ -180,6 +191,7 @@ public final class Updater {
     }
 
     void recover() throws Exception {
+        if (Files.exists(home.resolve(GitHubFolkways.JOURNAL))) throw new IOException("Official GitHub recovery must run through its matching source");
         Path p = home.resolve("journal.json");
         if (!Files.exists(p)) return;
         installCheck();

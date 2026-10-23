@@ -5,6 +5,7 @@
 ## 质量门禁
 
 - 每个 PR、main push 和 `v*` tag push 都在 Ubuntu 24.04 与 Windows 上使用 Java 21、Python 3.12 构建。`Java 21 / ubuntu-24.04`、`Java 21 / windows-latest` 两个检查名称保持稳定。
+- 两个平台也编译隔离客户端 UI 验收源码；该源码不进入正式 JAR，CI 不启动图形客户端。
 - 两个平台都运行 Gradle 的全部 Java/进程测试以及 `tests/publisher` 下的 Python 发布测试。两边均成功后，发布 job 才能开始。
 - `prepare` 校验外层 Mod 和内嵌 helper 的完整构建身份、Java 21 class 版本、Mod 版本与 helper 运行依赖，并生成只在当前 Actions run 内使用的发行清单。
 - 两个平台使用实际发行 JAR 中的 helper 做离线首次运行烟测：隔离临时实例、默认已发行包自动管理、真实父 Java 进程退出后 helper 执行、JAR 摘要不变、第二次启动清理上次已退出的 helper。此探针不启动 Minecraft、不访问网络、不修改用户实例；它不能替代真实 NeoForge 客户端验收。

@@ -5,6 +5,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.StandardOpenOption;
+import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
 
 /** Shared disk config; defaults deliberately protect source builds. */
 public final class Config {
@@ -34,6 +40,28 @@ public final class Config {
             c.validate();
             return c;
         } catch (RuntimeException e) { throw new IOException("Invalid updater config", e); }
+    }
+
+    /** Merge visible settings into the latest file without waiting for a network download lock. */
+    public static void edit(Path gameDir, Consumer<Config> changes) throws IOException {
+        Updater updater = new Updater(gameDir);
+        updater.directory(updater.home);
+        Path lockPath = updater.home.resolve("config.lock");
+        Path configPath = updater.home.resolve("config.json");
+        updater.safe(lockPath);
+        updater.safe(configPath);
+        try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            FileLock lock;
+            try { lock = channel.tryLock(); }
+            catch (OverlappingFileLockException busy) { throw new IOException("Configuration is being saved; retry", busy); }
+            if (lock == null) throw new IOException("Configuration is being saved; retry");
+            try (lock) {
+                Config latest = load(updater.game);
+                changes.accept(latest);
+                latest.validate();
+                Updater.atomic(configPath, Updater.JSON.toJson(latest).getBytes(StandardCharsets.UTF_8));
+            }
+        }
     }
 
     public boolean isLocalDevelopment(Path gameDir) {

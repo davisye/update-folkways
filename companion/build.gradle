@@ -1,15 +1,55 @@
 plugins { id 'net.neoforged.moddev' }
+
+// 只有显式 -PclientUiSmoke 才加载验收源码；默认 build/jar 不包含它。
+def clientUiSmokeEnabled = providers.gradleProperty('clientUiSmoke').isPresent()
+def clientUiSmokeDirectory = rootProject.layout.projectDirectory.dir('work/client-config-smoke')
+if (clientUiSmokeEnabled) {
+    sourceSets.create('clientSmoke')
+    configurations.clientSmokeImplementation.extendsFrom(configurations.implementation)
+    configurations.clientSmokeCompileOnly.extendsFrom(configurations.compileOnly)
+    configurations.clientSmokeRuntimeOnly.extendsFrom(configurations.runtimeOnly)
+    dependencies { clientSmokeImplementation sourceSets.main.output }
+    tasks.register('prepareClientUiSmoke') {
+        doLast {
+            def game = clientUiSmokeDirectory.asFile
+            game.mkdirs()
+            if (new File(game, 'world').exists() || (new File(game, 'saves').listFiles()?.length ?: 0) > 0) {
+                throw new GradleException('Refusing UI smoke in a directory containing worlds')
+            }
+            new File(game, 'config').mkdirs()
+            new File(game, 'client-ui-smoke-owner.txt').text = 'update-folkways-client-ui-smoke-v1\n'
+            new File(game, 'config/fml.toml').text = 'earlyWindowControl=false\n'
+            new File(game, 'options.txt').text = 'guiScale:2\nfullscreen:false\nsoundCategory_master:0.0\nonboardAccessibility:false\nlang:zh_cn\n'
+        }
+    }
+}
 neoForge {
     version = '21.1.233'
+    if (clientUiSmokeEnabled) addModdingDependenciesTo sourceSets.clientSmoke
     mods {
         folkways_updater {
             sourceSet sourceSets.main
             sourceSet project(':updater-core').sourceSets.main
+            if (clientUiSmokeEnabled) sourceSet sourceSets.clientSmoke
         }
     }
     runs {
         server { server(); programArgument '--nogui' }
-        client { client() }
+        client {
+            client()
+            if (clientUiSmokeEnabled) {
+                gameDirectory = clientUiSmokeDirectory
+                systemProperty 'folkways.updater.clientUiSmoke', 'true'
+                systemProperty 'folkways.updater.clientUiSmoke.gameDir', clientUiSmokeDirectory.asFile.absolutePath
+                programArgument '--width'
+                programArgument '1280'
+                programArgument '--height'
+                programArgument '800'
+                devLogin = false
+                disableIdeRun()
+                taskBefore tasks.named('prepareClientUiSmoke')
+            }
+        }
     }
 }
 dependencies { implementation project(':updater-core') }

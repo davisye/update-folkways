@@ -22,15 +22,17 @@
 
 面向 [Folkways](https://github.com/IzakyL/folkways) 开发版的独立 NeoForge 1.21.1 更新器。**新安装只需一个 Mod JAR**：运行时检查、提示和预下载，后台 helper 等整个游戏 JVM 退出后安装，下次启动加载新版本。无需手动安装 Bootstrap、启动脚本、更新元数据或密钥。
 
-> **开发预览。** 第一次运行加载你已安装的版本；更新准备给后续启动，不承诺每次启动前一定是最新。官方新安装可自动更新本更新器；Folkways 的公共自动签名通道仍延期，未配置其可信清单时不会替换 Folkways JAR。
+> **开发预览。** 第一次运行加载当前已安装的版本，下载准备给退出后安装；不承诺每次启动前一定是最新。默认从所选仓库的官方 GitHub Release 安装或更新 Folkways，无需填写签名密钥。独立签名清单仍是可选通道，其公共自动签名发布尚未启用。
 
 ## 快速开始
 
-1. 安装 Java 21 与 NeoForge 1.21.1，关闭准备使用的实例。
+1. 安装 Java 21 与 Minecraft 1.21.1 / NeoForge **21.1.233 或更新版本**，关闭准备使用的实例。
 2. 从 [Releases](https://github.com/davisye/update-folkways/releases) 下载 **`folkways-updater-neoforge-1.21.1-<version>.jar`**，放进实例 `mods/`。只保留一份 updater。
-3. 照常用你的启动器启动游戏。第一次会检查和预下载；正常退出后，让后台 helper 完成安装，下次启动使用新版本。
+3. 照常启动。空实例默认检查并预下载 Folkways **Core、Vanilla 和缺失的 LDLib2**；正常退出整个游戏，等待后台 helper 安装，再次启动后加载。
 
-更新 helper 已包含在 Mod 内，会自动释放到实例的 `.folkways-updater/`。不必更换启动器或复制额外脚本。本项目不代装 Minecraft、NeoForge、Folkways 或扩展的前置 Mod。
+更新 helper 已包含在 Mod 内，会自动释放到实例的 `.folkways-updater/`。不必更换启动器或复制额外脚本。Minecraft、NeoForge 仍需先安装；Create、Modular Golems、Cookery 的前置 Mod 不在自动代装范围。
+
+在 NeoForge **Mods → Folkways Development Updater → 配置** 中选择源、渠道和模块，或开启本地开发保护。点击检查会先保存，再后台检查；主菜单也能看到状态与下载提示，不必先进入世界。
 
 国内可先在官方 Release 确认同次发布的 JAR 文件名，再使用同附件镜像：
 
@@ -69,16 +71,19 @@ flowchart TD
 
 helper 安装前也会重查保护。人工重新编译或修改过的受管 JAR 与归属记录不符时，替换会停止。完整说明见 [配置指南](docs/configuration.md)。
 
-## 两条独立的更新通道
+## 更新来源与模块
 
 | 通道 | 信任与当前边界 |
 | --- | --- |
 | 更新器自身 | 固定 `davisye/update-folkways`；官方 API 的资产大小/SHA256、成功 `ci.yml` 构建、完整提交和 JAR 内构建身份一致才接受；无需配置 Folkways 签名密钥 |
-| Folkways Mod | 可选 `IzakyL/folkways` 或 `davisye/folkways`；需要预置信任的 Ed25519 公钥和签名清单，公共自动签名发布仍未启用 |
+| Folkways 默认来源 | 可选 `IzakyL/folkways` 或 `davisye/folkways`；核对官方 Release 资产摘要、固定提交和对应成功发布 CI，无需填写密钥 |
+| Folkways 可选签名来源 | 配置非空 `manifestUrl` 与可信 Ed25519 公钥后使用；公共自动签名发布尚未启用 |
 
-Folkways 通道支持 release、rc、beta、alpha、nightly；Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一次更新来自同一构建。`manifestUrl` / `publicKeys` 留空时，仅使用 updater 自身更新，不自动替换这些模块。
+Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一次更新来自同一构建。基础安装需要的外置库是 LDLib2；Ponder、Flywheel 和 Starlark 已由上游 JAR 内嵌，不重复安装。可选扩展要求先装兼容前置，缺失时会拒绝准备对应安装。
 
-网络新配置默认 `mirror-first`，GitHub 下载与 [github.davisye.cn](https://github.davisye.cn/) 可故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。自身更新的可信 API 信息严格直连官方 GitHub；API 不可用时保留现有版本。SHA256 校验不是数字签名。
+`manifestUrl` 留空即使用官方 GitHub 来源，不表示关闭 Folkways 更新。首次自动安装只接管没有 Folkways 的空集合；已有手动或本地编译的 Folkways JAR 不被静默接管。release、rc、beta、alpha、nightly 是可选渠道，当前两源实际只有 nightly；没有符合条件的发行时保留当前文件。
+
+网络新配置默认 `mirror-first`，GitHub 下载与 [github.davisye.cn](https://github.davisye.cn/) 可故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。可信元信息来自官方 API；不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
 
 [OpenList](https://pan.davisye.cn/) 可展示 Folkways 发布链接。nightly 只保留最新一套，其他渠道按版本归档；外链目录不等于持久二进制存储。发布工具和存储边界见 [发布镜像指南](docs/publishing.md)。
 
@@ -119,6 +124,6 @@ Windows/Linux [CI](https://github.com/davisye/update-folkways/actions/workflows/
 
 Drop one updater JAR into `mods/` and launch NeoForge 1.21.1 normally. The mod checks and stages downloads, then an embedded helper waits for the entire game JVM to exit before installing. The next launch loads the installed version; this does not guarantee the newest release before every startup scan.
 
-Official fresh installs use managed mode. Existing settings, locally compiled updater builds, NeoForge development environments, and explicit local-development switches remain protected. Updater self-updates use official GitHub asset digests and successful CI provenance. Folkways updates are separate and still require a trusted signed manifest; public automatic signing remains deferred.
+Official fresh installs use managed mode. The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. Existing settings, local builds, development environments, and explicit protection switches remain protected. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
 
 See [installation](docs/installation.md), [configuration](docs/configuration.md), and [verification limits](docs/verification.md). Drop-in restart was tested on an isolated NeoForge dedicated server with only this mod; a full Folkways pack, human players, and the Minecraft client were not tested. Full client restart remains unsupported.

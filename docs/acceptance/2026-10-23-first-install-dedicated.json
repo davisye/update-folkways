@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.233",
+  "artifactIdentity": "local development candidate; not public release",
+  "folkwaysRepository": "IzakyL/folkways",
+  "installedMods": [
+    "folkways-core-neoforge-1.21.1-0.1.0.jar",
+    "folkways-updater-neoforge-1.21.1-0.1.0-dev.jar",
+    "folkways-vanilla-neoforge-1.21.1-0.1.0.jar",
+    "ldlib2-neoforge-1.21.1-2.2.37-all.jar"
+  ],
+  "reachedDedicatedReady": true,
+  "normalExitCode": 0,
+  "worldSaved": true,
+  "modHashesUnchanged": true,
+  "networkDownloadsDisabled": true,
+  "clientUiTest": false
+}

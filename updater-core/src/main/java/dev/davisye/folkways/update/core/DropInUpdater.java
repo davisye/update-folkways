@@ -36,7 +36,7 @@ public final class DropInUpdater {
             if (System.currentTimeMillis() < currentStart().toEpochMilli()) throw new IOException("Clock moved behind this JVM's start; loading refused");
             Path legacy = u.home.resolve("self-journal.json"); u.safe(legacy);
             if (Files.exists(legacy)) throw new IOException("An unfinished legacy two-JAR transaction requires recovery with launch.ps1/launch.sh; this game load is refused");
-            for (String name : List.of(JOURNAL, "journal.json")) {
+            for (String name : List.of(JOURNAL, "journal.json", GitHubFolkways.JOURNAL)) {
                 u.safe(u.home.resolve(name));
                 if (Files.exists(u.home.resolve(name))) return "An interrupted updater installation blocks this game load; let the exit helper recover first";
             }
@@ -257,7 +257,7 @@ public final class DropInUpdater {
         u.locked(() -> { rejectLegacyTransaction(); return null; });
         Config config = Config.load(u.game);
         if (config.isLocalDevelopment(u.game) || unmanaged() || state().localBuild) {
-            if (Files.exists(u.home.resolve(JOURNAL)) || Files.exists(u.home.resolve("journal.json"))) throw new IOException("Local mode blocks interrupted installation recovery");
+            if (Files.exists(u.home.resolve(JOURNAL)) || Files.exists(u.home.resolve("journal.json")) || Files.exists(u.home.resolve(GitHubFolkways.JOURNAL))) throw new IOException("Local mode blocks interrupted installation recovery");
             return "Local development/manual build: files retained";
         }
         mutationCheck();
@@ -268,7 +268,8 @@ public final class DropInUpdater {
             public void check() throws Exception { mutationCheck(); }
             public void committed() throws Exception { markInstalled(u, false); }
         };
-        if (Files.exists(u.home.resolve("journal.json")) || (!config.manifestUrl.isBlank() && Files.exists(u.home.resolve("pending/manifest.json")))) u.applyPending();
+        if (Files.exists(u.home.resolve("journal.json")) || Files.exists(u.home.resolve(GitHubFolkways.JOURNAL))
+            || Files.exists(u.home.resolve("github-folkways-pending/plan.json")) || (!config.manifestUrl.isBlank() && Files.exists(u.home.resolve("pending/manifest.json")))) u.applyPending();
         return "Exit helper completed; verified pending files installed or current files retained";
     }
     private void applySelf(Config config) throws Exception {
