@@ -2,7 +2,6 @@ package dev.davisye.folkways.update.mod;
 
 import dev.davisye.folkways.update.core.Config;
 import dev.davisye.folkways.update.core.Updater;
-import dev.davisye.folkways.update.core.SelfUpdater;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -54,9 +53,9 @@ public final class ClientUpdates {
 
     private static void check() {
         try {
-            if (!FMLEnvironment.production || Config.load(GAME_DIR).isLocalDevelopment(GAME_DIR)) return;
+            if (!FMLEnvironment.production || UpdaterMod.localProtection()) return;
             String self;
-            try { self = new SelfUpdater(GAME_DIR).checkAndStage(); }
+            try { self = UpdaterMod.checkOwnUpdate(); }
             catch (Exception e) { self = "Updater self-check unavailable; current updater retained"; }
             String folkways;
             try { folkways = new Updater(GAME_DIR).checkAndStage(); }

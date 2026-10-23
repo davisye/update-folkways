@@ -55,11 +55,14 @@ final class RuntimeLease {
                 Optional<ProcessHandle> process = ProcessHandle.of(lease.pid);
                 if (process.isPresent() && process.get().isAlive()) {
                     Optional<java.time.Instant> start = process.get().info().startInstant();
-                    if (start.isEmpty() || start.get().toString().equals(lease.start)) throw new IOException("A game JVM is still alive; replacement refused");
+                    if (start.isEmpty() || start.get().toString().equals(lease.start)) throw new ActiveGameException();
                 }
                 Files.delete(path);
             }
         }
     }
     static final class Lease { long pid; String start; }
+    static final class ActiveGameException extends IOException {
+        ActiveGameException() { super("A game JVM is still alive; replacement refused"); }
+    }
 }

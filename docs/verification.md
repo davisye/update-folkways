@@ -1,62 +1,58 @@
 # 验证说明
 
-本页区分自动化覆盖、已做过的实际探测与尚未完成的场景。测试结果对应当次源码和环境；不代表未来 nightly、任意启动器或全部模组组合已验收。
+自动化测试、真实进程验证与完整 Minecraft 运行分别记录。当前源码或某个环境通过，不代表任意启动器、未来 nightly 或全部模组组合已验收。
 
-## 自动化覆盖
+## 当前单 JAR 模式
 
-[CI](https://github.com/davisye/update-folkways/actions/workflows/ci.yml) 的确切矩阵、触发条件和发布门禁以 [CI 文档](ci.md) 与工作流为准。主要测试关注行为和故障恢复：
+单 JAR 模式改变了安装与生命周期边界：普通启动器启动现有版本，Mod 预下载，独立 helper 等整个 JVM 退出后安装。它不继承旧 Bootstrap 扫描前更新的保证。
 
-| 范围 | 覆盖重点 |
-| --- | --- |
-| Folkways 核心 | 签名/摘要失败、范围与高水位、模块混包、选择下载、网络故障切换 |
-| 安装与恢复 | 归属检查、本地改动保护、逐文件事务、中断恢复、损坏 pending 不删除 previous |
-| 文件安全 | 路径逃逸、重复/错误 modId、符号链接与 Windows reparse point |
-| Bootstrap | 真实子 JVM、退出与重启握手、重复监督者、存活子进程门禁 |
-| 生命周期命令 | 权限/类型限制、取消、倒计时和正常停止请求 |
-| 发布工具 | 摘要与来源快照、签名互操作、幂等与不可变归档、latest 不倒退、锁和中断恢复 |
-| 更新器自更新 | 官方发布/构建身份、资产摘要、开发保护、seed 交接与自身文件归属 |
+当前已完成下述本地 NeoForge 生产专服生命周期实测。公开发行的单 JAR CI 与两个公开版本的网络升级结果仍待补充；以下是完整验收标准，不能全部视为已通过：
 
-测试名称与失败详情可在 Actions 测试报告和本地 Gradle XML 报告中查看。不要仅凭测试总数比较不同版本的质量。
+1. 只下载一个公开发行的 companion JAR 放入空白测试实例，无 standalone/scripts/metadata/keys；首次自动初始化、释放 helper，正常检查与预下载。
+2. 新官方实例无配置时 managed；既有配置不覆盖；源码构建、NeoForge dev、显式 true/env/marker 阻止网络和替换，独立 helper 同样重查。
+3. helper 只在精确父 JVM 退出且无其他游戏 lease 后安装，原 companion 路径和归属保留，两个实际版本的官方摘要与构建身份一致。
+4. 人为重叠“旧 JVM 退出 / helper 每个替换阶段 / 新 JVM 启动及较晚构造”，确保不让混代集合进入世界；冲突启动可以被拒绝并提示重开。
+5. 覆盖坏摘要、失败 CI、旧序号、人工改写、路径链接、并发 helper、半下载与安装中断。保留旧可用文件或恢复状态，缓存有界。
+6. `/shutdown` 的权限、倒计时、取消和正常存档仍有效；drop-in 专服 `/restart` 单独验证握手、异常退出和重启限额，完整客户端重启不在当前范围。
 
-## 已做过的实际验证
+实际通过结果应写明版本、提交、系统、预期与观察，不使用旧方式的测试数量替代。
 
-- 使用两源仓库各五个真实发布 JAR，逐个与 GitHub 资产 SHA256 比较，并核对代理 `bytes=0-127` 的真实内容、长度和 Content-Range。
-- 用真实五 JAR 输入完成逐 JAR 签名发布，Java 端分别验证两模块与五模块选择，不依赖 ZIP。
-- 在临时 NeoForge 专服实例中验证伴随 Mod、正常停止与 supervisor 重启流程；实例使用独立测试存档。
-- OpenList 访客目录与下载跳转经过读回；这证明外链分发路径可用，不证明存在自动签名发布或持久二进制归档。
+### 本地专服重启进程回归
 
-这些网络观察是一次性验证，不是监控或可用性 SLA。raw 文本 Range 的压缩表示问题仍存在于独立于 Release JAR 的路径，未宣称已修复。
+Windows 的 7 项重启测试已通过，包含实际父 JVM/helper/下一代 Java 进程，以及 Windows 参数解析：保留工作目录、空格、中文、空参数、字面引号、反斜线、10K 长参数，支持通过 PATH 启动的 `java`。未完成停止凭证、错误 token、未完成事务、禁用命令和预算耗尽均不重启。
 
-### 2026-10-23 公开 CI 首轮验收
+这组测试证明 Java 进程级交接，Minecraft 的实际停止与保存另按下一节验证，不能由参数测试代替。
 
-- [CI run 39953990440](https://github.com/davisye/update-folkways/actions/runs/39953990440) 在 Windows 与 Ubuntu 上完成 Java 21 构建、发布工具测试和真实 seed 首装烟测，发布 job 成功；源码为 `218b9f6fb741b103c847b78a9516035f03257f3d`。
-- 官方 nightly `0.1.0-nightly.6.1` 的六个附件经国内镜像下载后，全部与官方 GitHub API 返回的 digest/size 一致；清单和两个 JAR 均关联到该成功 run。
-- Windows 隔离实例使用发布的 seed 完成首次接管并启动真实前台 Java；默认 `localDevelopment=true` 时两个 JAR 摘要不变，runtime 与子进程门禁正常清理。该烟测没有启动 Minecraft 或真实世界。
+### 真实 NeoForge 专服生命周期
 
-### 两个官方版本的 Windows 自更新
+Windows / Java 21 / NeoForge 21.1.233 的隔离实例只安装一个 updater JAR，使用合成 CI 形状的测试构建，**不是公开发行身份验证**。实际生产加载通过 ModList、class resource、物理 JAR 身份门禁，helper 自动释放并 ready。
 
-[第二次官方构建](https://github.com/davisye/update-folkways/actions/runs/39954859064) 通过双平台门禁并发布 `0.1.0-nightly.7.1` 后，在同一隔离实例使用 **6.1 的原 seed** 完成 `6.1 → 7.1`：先预下载，再由 helper 于子 JVM 启动前替换 Bootstrap 和伴随 Mod；随后真实前台 Java 正常退出。两个安装 JAR 的摘要及内嵌构建身份均匹配 7.1，伴随 Mod 保留原文件路径，安装目录只存在一份伴随 Mod。
+通过 OP 4 管理接口发出 `/restart 0` 后，日志确认玩家/世界/区块正常保存，原 JVM 以 0 退出；helper 启动新整 JVM，原世界重新加载，并建立下一代 helper。`restartLimit=1` 时第二次重启在停服前拒绝，状态命令仍成功；之后 `/shutdown 0` 正常保存并退出。两个游戏 JVM 及 helper 最终终止，`level.dat` 和旧备份均有内容，`localDevelopment=true` 时 updater 摘要不变、无遗留事务日志。
 
-首次检查暂不可用时保留了旧文件并正常启动，后续 `self-check` 预下载和 seed 安装成功。成功后 pending、事务日志、runtime 和 child 门禁均清理，恢复备份保留一套双 JAR。Folkways 清单及公钥在整个自身更新实验中均为空。
+脱敏 [机器记录](acceptance/2026-10-23-dropin-lifecycle.json) 只保留事实和边界。该测试没有完整 Folkways 包、真实玩家或 Minecraft 客户端，也没有验证两个公开单 JAR 版本之间的网络更新或断电恢复。
 
-首轮官方报告中，Windows 的 55 项 Java 测试全部执行通过；Linux 通过 53 项、跳过 2 项 Windows 专用测试；两边均通过 43 项 Python 测试及实际 seed 烟测。真实 Windows CI 执行并通过了 8.3、根目录 junction 和受管链接拒绝回归。[机器可读验收记录](acceptance/2026-10-23-self-update.json) 保存版本、提交、run、摘要及测试边界；nightly 的历史附件按策略清理，不作为永久归档。
+## 已有核心验证
 
-## 仍需目标环境验收
+已有自动化覆盖签名/摘要、来源高水位、模块混包、选择下载、归属与本地改动保护、逐文件事务、中断恢复、pending/previous、链接路径、真实子 JVM 和发布幂等恢复等行为。[CI 文档](ci.md) 与 [工作流](../.github/workflows/ci.yml) 是当前执行命令的依据。
 
-- 完整 Folkways 模组包、所选扩展及目标存档的升级后加载与存档重开。
-- 常用客户端启动器的账号/会话参数接入；完整客户端 `/restart` 尚未实现。
-- Linux 真实网络跨版本升级，以及 Windows/Linux 真实安装中断恢复矩阵。已通过的独立 Java 烟测不代替完整 Minecraft 升级。
-- 实际存储驱动的缓存失效、并发上传、异步任务、写后读回和最小权限账号。
-- 操作系统断电/磁盘故障、目录 fsync 与多文件事务耐久性；普通故障注入不能代替断电测试。
+另外已用两个源仓库的十个真实 Folkways JAR 核对 GitHub digest，并实际验证代理完整下载与 `bytes=0-127`；用五 JAR 输入完成逐 JAR 签名互操作及两/五模块选择。临时 NeoForge 专服做过正常停止与外部 supervisor 重启；这些不等于完整 Folkways 包或新 drop-in 重启已验证。
 
-## 可执行验收清单
+OpenList 访客目录和跳转读回证明外链分发路径可用，不证明自动签名或持久二进制归档。raw 文本 Range 的压缩表示问题仍有边界。
 
-1. **开发保护：** 在配置、环境变量、标记文件和 NeoForge 开发环境分别启用保护；检查无网络下载、无 staging、无替换。下载途中开启保护后也不能安装。
-2. **正常更新：** 在关闭的临时实例接管已知 JAR，发布更高序号构建；只下载所选模块；启动 JVM 前全部验包并完成替换。
-3. **失败与缓存：** 制造超时、坏签名、坏摘要、错误 modId、旧序号、重复 JAR、半下载、安装中断。确认旧可用安装保留、恢复日志可重试、缓存有界。
-4. **进程保护：** 第二个 supervisor 和 orphan 子 JVM 存活时都拒绝替换；不确定 launching 门禁保留并要求确认。
-5. **命令与存档：** 非 OP、未启用命令、无 supervisor、集成服务器重启均按预期拒绝；正常停止后重新打开存档检查内容；验证取消、异常退出与重启次数限制。
-6. **发布：** 连续两次 nightly 最终只保留最新一套；正式版本不同内容不能覆盖；latest 不降序；相同包可重试；中断后完整恢复。
-7. **自身更新：** 只接受官方成功构建及匹配资产；断网可启动现有版本；开发构建和人工改动不覆盖；helper 真正退出后 seed 才启动新程序。
+## 历史：外部 Bootstrap/seed 验收
 
-实际验收记录应包含版本、提交、系统、预期、观察与脱敏错误，不应提交私有路径、账号令牌、会话参数、世界数据或服务器管理日志。
+2026-10-23 的 [run 39953990440](https://github.com/davisye/update-folkways/actions/runs/39953990440) 对应提交 `218b9f6fb741b103c847b78a9516035f03257f3d`：Windows 55 Java 通过、零跳过；Linux 53 通过、2 项 Windows 专用测试跳过；两端 43 Python 通过，并执行实际 seed 首装烟测。六附件下载字节与官方 API 摘要一致。
+
+随后 [run 39954859064](https://github.com/davisye/update-folkways/actions/runs/39954859064) 发布 7.1，在 Windows 隔离实例以 6.1 原 seed 完成 `6.1 → 7.1`。两个 JAR 摘要及嵌入构建身份匹配新发布，旧 companion 路径保留，pending/journal/runtime/child 清理，备份保留一套。首次检查暂不可用时保留旧文件并启动；后续预下载和安装成功，未对暂不可用原因下结论。
+
+这项实验使用外部 seed 和独立前台 Java，没有启动 Minecraft 或真实世界；不是新 drop-in 模式的端到端证明。[历史机器记录](acceptance/2026-10-23-self-update.json) 保留精确身份与边界，nightly 历史附件可按策略清理。
+
+## 后续目标环境验收
+
+- 新 drop-in 模式的真实 Windows/Linux 网络升级、重开竞态与中断恢复。
+- 完整 Folkways 模组包、所选扩展及目标存档的升级后加载与重新打开。
+- 常用客户端启动器中的退出行为与错误提示；完整客户端重启仍需适配。
+- 真实 OpenList 后端的任务完成、写后读回、缓存、并发与最小权限账号。
+- 断电、磁盘故障与多文件耐久性，不能由普通故障注入替代。
+
+验收日志只提交脱敏的必要证据，不包含本机路径、SSH/生产配置、令牌、启动器会话、世界或玩家数据。

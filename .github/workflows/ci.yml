@@ -69,10 +69,10 @@ jobs:
             "-Psequence=$BUILD_SEQUENCE" "-Pchannel=$BUILD_CHANNEL"
       - name: Publisher and self-release tests
         run: python -m unittest discover -s tests/publisher -v
-      - name: Assemble and verify exactly two updater JARs and two seed launchers
+      - name: Assemble and verify one drop-in Mod JAR with its embedded helper
         run: python tools/self_release.py prepare --output dist
-      - name: Smoke actual seed installation and foreground JVM offline
-        run: python tools/seed_smoke.py --directory dist
+      - name: Smoke actual drop-in startup and post-exit helper offline
+        run: python tools/dropin_smoke.py --directory dist
       - name: Upload candidate assets from this run
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -121,7 +121,7 @@ jobs:
           path: dist/
       - name: Verify candidate files before publication
         run: python tools/self_release.py verify --directory dist
-      - name: Publish metadata last and verify GitHub-generated asset digests
+      - name: Publish one Mod JAR and verify its GitHub-generated asset digest
         env:
           GH_TOKEN: ${{ github.token }}
         run: python tools/self_release.py publish --directory dist

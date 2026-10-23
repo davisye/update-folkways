@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "repository": "davisye/update-folkways",
+  "scenario": "single-mod dedicated-server lifecycle",
+  "passed": true,
+  "environment": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.233",
+    "java": 21,
+    "platform": "Windows",
+    "artifactIdentity": "synthetic CI-shaped test build; not a published release",
+    "installedModCount": 1,
+    "localDevelopment": true
+  },
+  "checks": {
+    "productionModLoaded": true,
+    "loaderResourceAndPhysicalIdentityGuardPassed": true,
+    "helperAutomaticallyExtracted": true,
+    "helperReadyBeforeRestart": true,
+    "normalSaveCompletedBeforeParentExit": true,
+    "originalJvmExitCode": 0,
+    "newWholeJvmStarted": true,
+    "sameWorldLoadedAgain": true,
+    "nextJvmHasItsOwnHelper": true,
+    "restartLimit": 1,
+    "secondRestartRefusedBeforeStopping": true,
+    "statusStillAvailableAfterRefusal": true,
+    "shutdownSavedWorld": true,
+    "levelDatAndPreviousHaveContent": true,
+    "localModeJarHashUnchanged": true,
+    "leftoverJournals": 0,
+    "bothGameJvmsExited": true,
+    "bothHelpersExited": true
+  },
+  "limits": {
+    "publicReleaseProvenanceVerifiedByThisTest": false,
+    "networkCrossVersionUpdateTested": false,
+    "fullFolkwaysPackTested": false,
+    "humanPlayersConnected": false,
+    "minecraftClientTested": false,
+    "powerLossDurabilityTested": false
+  }
+}

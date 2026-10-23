@@ -232,7 +232,7 @@ public final class SelfUpdater {
             Owned owned = entry.getValue(); Updater.verify(u.readBounded(target(entry.getKey(), owned), LIMIT), owned.sha256, owned.size);
         }
     }
-    private List<Path> companions() throws IOException {
+    List<Path> companions() throws IOException {
         List<Path> result = new ArrayList<>(); u.safe(u.mods);
         if (!Files.exists(u.mods)) return result;
         try (var files = Files.list(u.mods)) {
@@ -288,7 +288,7 @@ public final class SelfUpdater {
         verifyRun(source, metadata, release);
         Trusted result = new Trusted(); result.release = release; result.metadata = metadata; result.metadataAsset = metadataAsset; result.bytes = bytes; return result;
     }
-    private ApiRelease officialRelease(Source source, Config config) throws Exception {
+    static ApiRelease officialRelease(Source source, Config config) throws Exception {
         String endpoint = config.selfUpdateChannel.equals("nightly") ? "/releases/tags/nightly" : "/releases/latest";
         byte[] bytes = source.official(API + endpoint, 4 * 1024 * 1024);
         if (bytes.length > 4 * 1024 * 1024) throw new IOException("Official release response exceeds limit");
@@ -307,16 +307,16 @@ public final class SelfUpdater {
         if (matches.size() != 1) throw new IOException("Missing or duplicate updater asset: " + name);
         Asset result = matches.getFirst(); hashOf(result); return result;
     }
-    private static String hashOf(Asset asset) throws IOException {
+    static String hashOf(Asset asset) throws IOException {
         if (asset.digest == null || !asset.digest.matches("sha256:[0-9a-f]{64}")) throw new IOException("Official GitHub asset digest is missing");
         return asset.digest.substring(7);
     }
-    private static String releaseFingerprint(ApiRelease release) {
+    static String releaseFingerprint(ApiRelease release) {
         return release.id + ":" + release.tag_name + ":" + release.target_commitish + ":" + release.assets.stream()
             .filter(asset -> asset.name.equals("update-metadata.json") || asset.name.endsWith(".jar"))
             .sorted(Comparator.comparing(asset -> asset.name)).map(asset -> asset.id + ":" + asset.name + ":" + asset.digest + ":" + asset.size).toList();
     }
-    private static void verifyRun(Source source, Metadata metadata, ApiRelease release) throws Exception {
+    static void verifyRun(Source source, Metadata metadata, ApiRelease release) throws Exception {
         byte[] bytes = source.official(API + "/actions/runs/" + metadata.runId, 2 * 1024 * 1024);
         if (bytes.length > 2 * 1024 * 1024) throw new IOException("CI response exceeds limit");
         Run run = Updater.JSON.fromJson(new String(bytes, StandardCharsets.UTF_8), Run.class);
@@ -380,11 +380,11 @@ public final class SelfUpdater {
         }
         return mods == 1 && id && correctVersion;
     }
-    private static boolean sameBuild(BuildInfo a, BuildInfo b) {
+    static boolean sameBuild(BuildInfo a, BuildInfo b) {
         return Objects.equals(a.version, b.version) && Objects.equals(a.commit, b.commit) && Objects.equals(a.runId, b.runId)
             && a.runNumber == b.runNumber && a.runAttempt == b.runAttempt && a.sequence == b.sequence && Objects.equals(a.channel, b.channel);
     }
-    private static boolean publishedBuild(BuildInfo info) {
+    static boolean publishedBuild(BuildInfo info) {
         try {
             return info.sequence > 0 && info.runNumber > 0 && info.sequence == Math.addExact(Math.multiplyExact(info.runNumber, 1000), info.runAttempt)
                 && info.runAttempt > 0 && info.runAttempt < 1000 && info.runId != null && info.runId.matches("[1-9][0-9]*")

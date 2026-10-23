@@ -41,6 +41,10 @@ tasks.named('jar') {
     archiveBaseName = 'folkways-updater-neoforge-1.21.1'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from project(':updater-core').sourceSets.main.output
-    dependsOn ':updater-core:classes'
+    dependsOn ':updater-core:classes', ':updater-core:bootstrapJar'
+    from({ project(':updater-core').tasks.named('bootstrapJar').get().archiveFile.get().asFile }) {
+        into 'META-INF/folkways-updater'
+        rename { 'helper.jar' }
+    }
 }
 tasks.withType(JavaExec).configureEach { standardInput = System.in }
