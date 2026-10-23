@@ -1,0 +1,181 @@
+{
+  "fixture": "update-folkways-client-ui-smoke-v1",
+  "started": true,
+  "factoryRegistered": true,
+  "missingOptionalPrerequisitesDisabled": true,
+  "repositoryClicked": true,
+  "localClicked": true,
+  "saved": true,
+  "hiddenEditsPreserved": true,
+  "ideProtectionRetained": true,
+  "basicLayout": {
+    "visibleWidgets": [
+      {
+        "width": 460,
+        "active": true,
+        "y": 56,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 227,
+        "active": true,
+        "y": 80,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 227,
+        "active": true,
+        "y": 80,
+        "x": 323,
+        "height": 20
+      },
+      {
+        "width": 149,
+        "active": false,
+        "y": 104,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 149,
+        "active": false,
+        "y": 104,
+        "x": 245,
+        "height": 20
+      },
+      {
+        "width": 150,
+        "active": false,
+        "y": 104,
+        "x": 400,
+        "height": 20
+      },
+      {
+        "width": 227,
+        "active": true,
+        "y": 128,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 227,
+        "active": true,
+        "y": 128,
+        "x": 323,
+        "height": 20
+      },
+      {
+        "width": 227,
+        "active": true,
+        "y": 152,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 227,
+        "active": true,
+        "y": 152,
+        "x": 323,
+        "height": 20
+      },
+      {
+        "width": 149,
+        "active": true,
+        "y": 372,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 149,
+        "active": true,
+        "y": 372,
+        "x": 245,
+        "height": 20
+      },
+      {
+        "width": 150,
+        "active": true,
+        "y": 372,
+        "x": 400,
+        "height": 20
+      }
+    ],
+    "height": 400,
+    "width": 640
+  },
+  "advancedLayout": {
+    "visibleWidgets": [
+      {
+        "width": 460,
+        "active": true,
+        "y": 56,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 460,
+        "active": true,
+        "y": 80,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 460,
+        "active": true,
+        "y": 104,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 460,
+        "active": true,
+        "y": 128,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 460,
+        "active": true,
+        "y": 152,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 149,
+        "active": true,
+        "y": 372,
+        "x": 90,
+        "height": 20
+      },
+      {
+        "width": 149,
+        "active": true,
+        "y": 372,
+        "x": 245,
+        "height": 20
+      },
+      {
+        "width": 150,
+        "active": true,
+        "y": 372,
+        "x": 400,
+        "height": 20
+      }
+    ],
+    "height": 400,
+    "width": 640
+  },
+  "factoryBackClosesToParent": true,
+  "passed": true,
+  "phase": "COMPLETE",
+  "elapsedMillis": 2321,
+  "screenshots": [
+    "screenshots/config-basic.png",
+    "screenshots/config-advanced.png"
+  ],
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.233",
+  "scope": "Real isolated NeoForge development client; no network update bypass and no user instance changes"
+}

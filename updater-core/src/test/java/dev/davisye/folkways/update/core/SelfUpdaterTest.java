@@ -117,7 +117,7 @@ class SelfUpdaterTest {
     }
     @Test void selfUpdateStagesWithoutAnyFolkwaysManifestOrPublicKeys() throws Exception {
         fixture(); assertTrue(config.manifestUrl.isBlank()); assertTrue(config.publicKeys.isEmpty());
-        assertEquals("No signed manifest URL configured", new Updater(game).checkAndStage());
+        assertTrue(new Updater(game).checkAndStage().contains("current NeoForge version"));
         assertTrue(updater.checkAndStage().contains("downloaded")); assertTrue(Files.exists(pending().resolve("metadata.json"))); assertOld();
     }
     @Test void localConfigMarkerAndLocalBuildProtectBeforeNetwork() throws Exception {

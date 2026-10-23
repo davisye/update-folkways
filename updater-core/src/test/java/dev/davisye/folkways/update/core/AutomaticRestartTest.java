@@ -39,9 +39,23 @@ class AutomaticRestartTest {
                     .filter(ProcessHandle::isAlive).ifPresent(child -> child.onExit().join());
             assertFalse(Files.exists(game.resolve("third-launch")), "Restart budget was bypassed");
         } finally {
-            if (p.isAlive()) { p.descendants().forEach(ProcessHandle::destroyForcibly); p.destroyForcibly(); }
+            if (p.isAlive()) {
+                p.descendants().forEach(ProcessHandle::destroyForcibly);
+                p.destroyForcibly();
+                assertTrue(p.waitFor(10, TimeUnit.SECONDS), "Synthetic parent did not terminate");
+            }
             Path helper = game.resolve("helper-pid");
-            if (Files.exists(helper)) ProcessHandle.of(Long.parseLong(Files.readString(helper))).filter(ProcessHandle::isAlive).ifPresent(ProcessHandle::destroyForcibly);
+            if (Files.exists(helper)) {
+                ProcessHandle child = ProcessHandle.of(Long.parseLong(Files.readString(helper))).orElse(null);
+                if (child != null && child.isAlive()) {
+                    // helper-done is written before the JVM releases helper.log on Windows.
+                    try { child.onExit().get(10, TimeUnit.SECONDS); }
+                    catch (java.util.concurrent.TimeoutException timeout) {
+                        child.destroyForcibly();
+                        child.onExit().get(10, TimeUnit.SECONDS);
+                    }
+                }
+            }
         }
     }
     @Test void completedSaveRestartsExactJavaArgumentsAndPreservesWorkingDirectoryOnce() throws Exception { run("normal", 2); }

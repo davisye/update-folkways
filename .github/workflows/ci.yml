@@ -48,7 +48,7 @@ jobs:
           BUILD_SEQUENCE: ${{ steps.identity.outputs.sequence }}
           BUILD_CHANNEL: ${{ steps.identity.outputs.channel }}
         run: >-
-          .\gradlew.bat build --console=plain
+          .\gradlew.bat build :companion:compileClientSmokeJava -PclientUiSmoke --console=plain
           "-Pversion=$env:BUILD_VERSION" "-PbuildId=$env:GITHUB_SHA"
           "-PrunId=$env:GITHUB_RUN_ID" "-PrunAttempt=$env:GITHUB_RUN_ATTEMPT"
           "-PrunNumber=$env:GITHUB_RUN_NUMBER"
@@ -62,7 +62,7 @@ jobs:
           BUILD_CHANNEL: ${{ steps.identity.outputs.channel }}
         run: |
           chmod +x gradlew
-          ./gradlew build --console=plain \
+          ./gradlew build :companion:compileClientSmokeJava -PclientUiSmoke --console=plain \
             "-Pversion=$BUILD_VERSION" "-PbuildId=$GITHUB_SHA" \
             "-PrunId=$GITHUB_RUN_ID" "-PrunAttempt=$GITHUB_RUN_ATTEMPT" \
             "-PrunNumber=$GITHUB_RUN_NUMBER" \

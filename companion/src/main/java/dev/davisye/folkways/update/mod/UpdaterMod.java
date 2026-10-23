@@ -46,6 +46,7 @@ public final class UpdaterMod {
     private boolean shutdownIssued;
     private boolean restartRequested;
     private String lastNotice = "";
+    private volatile long nextPoll;
 
     public UpdaterMod() {
         try {
@@ -82,7 +83,7 @@ public final class UpdaterMod {
         try {
             Config config = Config.load(gameDir);
             if (config.commandsEnabled) prepareAutomaticRestart();
-            if (!FMLEnvironment.production || config.isLocalDevelopment(gameDir)) {
+            if (!FMLEnvironment.production) {
                 LOG.info("Local development: automatic update polling and replacement are disabled");
                 return;
             }
@@ -91,8 +92,15 @@ public final class UpdaterMod {
                 thread.setDaemon(true);
                 return thread;
             });
-            polling.scheduleWithFixedDelay(() -> check(event.getServer()), 15,
-                    Math.max(60, config.pollSeconds), TimeUnit.SECONDS);
+            nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+            polling.scheduleWithFixedDelay(() -> {
+                if (System.nanoTime() < nextPoll) return;
+                try {
+                    Config current = Config.load(gameDir);
+                    nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(current.isLocalDevelopment(gameDir) ? 5 : current.pollSeconds);
+                    check(event.getServer());
+                } catch (Exception e) { nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(60); }
+            }, 5, 5, TimeUnit.SECONDS);
         } catch (Exception e) { LOG.warn("Updater polling unavailable: {}", e.getClass().getSimpleName()); }
     }
 
@@ -104,7 +112,7 @@ public final class UpdaterMod {
             try { self = checkOwnUpdate(); }
             catch (Exception e) { self = "Updater self-check unavailable; current updater retained"; }
             String folkways;
-            try { folkways = new Updater(gameDir).checkAndStage(); }
+            try { folkways = folkwaysUpdater().checkAndStage(); }
             catch (Exception e) { folkways = "Folkways check unavailable; installed Folkways retained"; }
             String notice = self + " | " + folkways;
             if (!stopping && !notice.equals(lastNotice)) {
@@ -127,7 +135,7 @@ public final class UpdaterMod {
                 .requires(source -> source.hasPermission(4))
                 .then(Commands.literal("status").executes(context -> {
                     try {
-                        String status = new Updater(gameDir).status() + " | " + (dropIn == null ? "Local IDE build: updater replacement disabled" : dropIn.status());
+                        String status = folkwaysUpdater().status() + " | " + (dropIn == null ? "Local IDE build: updater replacement disabled" : dropIn.status());
                         context.getSource().sendSuccess(() -> Component.literal(status), false);
                         return 1;
                     } catch (Exception e) { return fail(context.getSource(), "无法读取更新状态。"); }
@@ -183,6 +191,12 @@ public final class UpdaterMod {
                 "[Folkways updater] " + seconds + " 秒后" + (action == LifecycleRequest.Action.RESTART ? "保存并重启。" : "保存并关闭。")
                         + " 可用 /" + (action == LifecycleRequest.Action.RESTART ? "restart" : "shutdown") + " cancel 取消。"), false);
         return 1;
+    }
+
+    static Updater folkwaysUpdater() throws Exception {
+        String loader = ModList.get().getModContainerById("neoforge").orElseThrow()
+                .getModInfo().getVersion().toString();
+        return new Updater(FMLPaths.GAMEDIR.get(), loader);
     }
 
     static boolean localProtection() throws Exception {

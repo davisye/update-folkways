@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "repository": "davisye/update-folkways",
+  "scenario": "published single-JAR updater self-update",
+  "passed": true,
+  "platform": "Windows",
+  "java": 21,
+  "first": {
+    "version": "0.1.0-nightly.14.1",
+    "sha256": "c33da2cabf2236f9b91110f3230e84a334ea11c13355797c1e0531290de1edc5",
+    "size": 492152,
+    "publicAssets": 1,
+    "build": {
+      "schema": 1,
+      "repository": "davisye/update-folkways",
+      "component": "companion",
+      "version": "0.1.0-nightly.14.1",
+      "commit": "137136547dda463478c3f293a8f7bfde8ab9879d",
+      "runId": "39968500131",
+      "runNumber": 14,
+      "runAttempt": 1,
+      "sequence": 14001,
+      "channel": "nightly",
+      "minecraft": "1.21.1"
+    },
+    "assetId": 669360625,
+    "releaseId": 421823415,
+    "downloadUrl": "https://github.com/davisye/update-folkways/releases/download/nightly/folkways-updater-neoforge-1.21.1-0.1.0-nightly.14.1.jar",
+    "mirrorUrl": "https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/folkways-updater-neoforge-1.21.1-0.1.0-nightly.14.1.jar",
+    "finalDownloadHost": "github.davisye.cn",
+    "mirrorBytesMatchOfficialDigest": true,
+    "successfulOfficialCi": true,
+    "embeddedHelperIdentityMatches": true
+  },
+  "second": {
+    "version": "0.1.0-nightly.14.2",
+    "sha256": "36e49b879340698a4c29324a1f3ae0b423d156703806323e901bfba5e165ea46",
+    "size": 492153,
+    "publicAssets": 1,
+    "build": {
+      "schema": 1,
+      "repository": "davisye/update-folkways",
+      "component": "companion",
+      "version": "0.1.0-nightly.14.2",
+      "commit": "137136547dda463478c3f293a8f7bfde8ab9879d",
+      "runId": "39968500131",
+      "runNumber": 14,
+      "runAttempt": 2,
+      "sequence": 14002,
+      "channel": "nightly",
+      "minecraft": "1.21.1"
+    },
+    "assetId": 669385187,
+    "releaseId": 421823415,
+    "downloadUrl": "https://github.com/davisye/update-folkways/releases/download/nightly/folkways-updater-neoforge-1.21.1-0.1.0-nightly.14.2.jar",
+    "mirrorUrl": "https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/folkways-updater-neoforge-1.21.1-0.1.0-nightly.14.2.jar",
+    "finalDownloadHost": "github.davisye.cn",
+    "mirrorBytesMatchOfficialDigest": true,
+    "successfulOfficialCi": true,
+    "embeddedHelperIdentityMatches": true
+  },
+  "checks": {
+    "automaticallyAdoptedFirstPublicJar": true,
+    "freshManagedDefault": true,
+    "actualOfficialApiAndCiValidated": true,
+    "configuredNetworkPolicy": "mirror-first",
+    "runtimeDownloadRouteInstrumented": false,
+    "bothReleaseMirrorBytesMatchOfficialDigests": true,
+    "runningParentKeptOldJar": true,
+    "downloadReadyBeforeParentExit": true,
+    "helperWaitedForExactParent": true,
+    "offlinePostExitInstallSucceeded": true,
+    "installedHashMatchesNextOfficialAsset": true,
+    "originalModFilenameKept": true,
+    "configurationBytesUnchanged": true,
+    "oneBackupMatchesOriginalJar": true,
+    "pendingAndJournalsCleared": true,
+    "nextStartupAcceptedNewBuild": true,
+    "nextStartupPrunedDeadHelper": true,
+    "retainedHelperGenerations": 1
+  },
+  "limits": {
+    "minecraftStartedInThisNetworkScenario": false,
+    "fullFolkwaysPackTested": false,
+    "minecraftClientTested": false,
+    "signingAutomated": false
+  },
+  "ci": {
+    "url": "https://github.com/davisye/update-folkways/actions/runs/39968500131/attempts/2",
+    "commit": "137136547dda463478c3f293a8f7bfde8ab9879d",
+    "results": {
+      "Windows": {
+        "javaTotal": 80,
+        "javaPassed": 80,
+        "javaSkipped": 0,
+        "javaFailures": 0,
+        "publisherTestsPassed": 55,
+        "actualEmbeddedHelperSmokePassed": true
+      },
+      "Linux": {
+        "javaTotal": 80,
+        "javaPassed": 78,
+        "javaSkipped": 2,
+        "javaFailures": 0,
+        "publisherTestsPassed": 55,
+        "actualEmbeddedHelperSmokePassed": true
+      }
+    }
+  }
+}

@@ -29,6 +29,8 @@ main 通过 Pull Request 合并，要求 Windows 与 Ubuntu 的 CI 均通过并�
 
 单 JAR 模式检查与预下载后，helper 等整个 JVM 退出才安装。涉及初始化或事务的改动，应覆盖新官方安装/已有配置/本地构建三种情形，以及父 JVM 退出、新 JVM 较晚构造、helper 每个写入阶段的重叠。冲突时可以拒绝启动，但不能让混代文件进入世界。
 
+默认官方 Folkways 来源还应覆盖空集合首装、已有手动包拒绝接管、依赖缺失/版本冲突、切源或切换签名通道、部分新增文件的恢复。依赖写入不能绕过本地开发保护；真实网络测试应记录官方项目/版本/资产摘要，不把成功 CI 当作签名证明。
+
 旧外部 seed 的进程测试不是 drop-in 已验证的替代品。公开结果必须注明真实 Minecraft/存档是否测试；不要把前台 Java 探针写成完整游戏测试。
 
 ## 问题报告
@@ -42,3 +44,7 @@ main 通过 Pull Request 合并，要求 Windows 与 Ubuntu 的 CI 均通过并�
 不要提交密钥、token、Cookie、私有配置、`.env`、启动器账号/会话参数、本机绝对路径、SSH 配置、服务器管理日志、生产备份或玩家数据。测试夹具应使用虚构值和临时目录；真实下载二进制放在忽略的本地工作目录。
 
 第三方代码或素材需要保留许可与来源。贡献遵循本仓库现有 [MIT 许可证](LICENSE)，第三方依赖见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+
+## 客户端配置页验收
+
+编译验收入口：`./gradlew -PclientUiSmoke :companion:compileClientSmokeJava`。有图形环境时运行 `./gradlew -PclientUiSmoke :companion:runClient`（Windows 用 `gradlew.bat`）。仅使用独立的 `work/client-config-smoke`，自动核对实际配置工厂、按钮、保存合并、本地保护与页面边界，截图后关闭自己的测试客户端。此源码不进入发行 JAR；不要把测试运行目录改为实际游戏实例。

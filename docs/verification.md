@@ -6,7 +6,7 @@
 
 单 JAR 模式改变了安装与生命周期边界：普通启动器启动现有版本，Mod 预下载，独立 helper 等整个 JVM 退出后安装。它不继承旧 Bootstrap 扫描前更新的保证。
 
-当前已完成下述本地 NeoForge 生产专服生命周期实测。公开发行的单 JAR CI 与两个公开版本的网络升级结果仍待补充；以下是完整验收标准，不能全部视为已通过：
+已完成公开单 JAR 的 Windows 网络升级，以及下述本地 NeoForge 生产专服生命周期实测。以下仍是完整验收标准，不能全部视为已通过：
 
 1. 只下载一个公开发行的 companion JAR 放入空白测试实例，无 standalone/scripts/metadata/keys；首次自动初始化、释放 helper，正常检查与预下载。
 2. 新官方实例无配置时 managed；既有配置不覆盖；源码构建、NeoForge dev、显式 true/env/marker 阻止网络和替换，独立 helper 同样重查。
@@ -16,6 +16,28 @@
 6. `/shutdown` 的权限、倒计时、取消和正常存档仍有效；drop-in 专服 `/restart` 单独验证握手、异常退出和重启限额，完整客户端重启不在当前范围。
 
 实际通过结果应写明版本、提交、系统、预期与观察，不使用旧方式的测试数量替代。
+
+### 公开单 JAR 自身更新
+
+Windows / Java 21 的隔离 Java 进程以官方 `0.1.0-nightly.14.1` 自动建立归属，实际从官方 API 校验、预下载 `14.2`，等精确父进程退出后由内嵌 helper 安装。安装字节匹配下一版官方资产摘要，原 Mod 文件名和配置字节保留，一套备份匹配原 JAR；pending 与事务清理，下一次启动接受新身份并清理已退出的 helper。
+
+两版均来自提交 `137136547dda463478c3f293a8f7bfde8ab9879d` 的 [run 39968500131](https://github.com/davisye/update-folkways/actions/runs/39968500131/attempts/2)，分别为 attempt 1 / 2、序号 14001 / 14002；这是两个公开发行身份的更新，不是两个不同源码提交。attempt 2 的 Windows Java 80/80，Linux 78 通过、2 项平台专用跳过；两端 Python 55 通过，实际内嵌 helper 烟测通过。
+
+两个发布的镜像下载字节分别匹配官方摘要；更新运行配置为 mirror-first，但该次内部下载路由未单独埋点，不能称为运行时路由证明。此网络场景没有启动 Minecraft；实际 NeoForge 存档与生命周期另见下节。脱敏 [机器记录](acceptance/2026-10-23-dropin-public-upgrade.json) 保存精确身份、摘要与边界，nightly 旧附件可按策略清理。
+
+### 默认 Folkways 首装与客户端配置
+
+本轮新增默认官方 GitHub 来源、空集合首装、缺失 LDLib2 安装与游戏内配置页。定向核心测试覆盖空集合归属、已有手动/本地包保护、错误摘要/CI、缺库/旧库、切源/签名通道、开发保护、重复文件、首装恢复与存活游戏门禁；依赖解析另覆盖合法空白/引号表名和预发布版本下限。
+
+两个源均用真实 Core、Vanilla、LDLib2 字节与已获取的官方 release/run 快照完成隔离 `checkAndStage → offline apply → already current`。安装后摘要匹配对应官方资产；原本没有 Folkways，最终为三 JAR 基础集合。此 harness 注入缓存内容，commit API 响应由目标 SHA 生成，**没有走 Java 正式 HTTP Transport，也没有启动 Minecraft**。[机器记录](acceptance/2026-10-23-folkways-first-install.json) 明确保留这些边界。
+
+本地 Windows / Java 21 的最终完整构建记录 97 项 Java 测试：96 通过、1 项因测试卷没有 8.3 根路径别名跳过；Python 发布测试 55 通过。两平台 CI 还编译客户端验收源码，正式 JAR 检查确认它没有被打包。
+
+真实隔离 NeoForge 21.1.233 客户端已打开实际注册的配置工厂：来源与本地开发按钮可点，保存写入共享配置，打开草稿后外部修改的重启字段保持，IDE 开发标记仍生效；缺少前置的三个可选扩展保持可见禁用。基础/高级两页真实 framebuffer 截图已检查，控件均在屏幕内，返回原页面和正常退出通过。[界面机器记录](acceptance/2026-10-23-client-configuration.json) 保存结果。此测试不绕过 dev 保护，也不执行客户端内网络更新。
+
+另已使用正式 Java HTTP Transport 对全新隔离目录完成真实网络首装：官方 API、所选上游固定提交/成功 CI、实际附件与 LDLib2 均未注入测试数据。预下载 JVM 退出后，由另一 JVM 离线安装三份文件，再从官方 API 复查已是最新；摘要与归属一致，pending/journal 清理。网络配置为 mirror-first，内部路由未单独埋点；该网络场景不启动 Minecraft 或 drop-in helper。[真实网络机器记录](acceptance/2026-10-23-folkways-network-first-install.json) 与下面的 Minecraft 加载、界面结果分别记录。
+
+真实首装互通得到的上游 Core、Vanilla、LDLib2，加本地开发候选 updater，在独立 NeoForge 21.1.233 生产专服实际加载成功，达到 Done 后正常保存和退出，产生 level.dat，四份 JAR 摘要保持不变。[专服机器记录](acceptance/2026-10-23-first-install-dedicated.json) 记录结果；网络已显式关闭，此场景验证加载/保存，不等同于从 Mod 轮询到退出 helper 的完整链路。
 
 ### 本地专服重启进程回归
 
@@ -49,7 +71,7 @@ OpenList 访客目录和跳转读回证明外链分发路径可用，不证明�
 
 ## 后续目标环境验收
 
-- 新 drop-in 模式的真实 Windows/Linux 网络升级、重开竞态与中断恢复。
+- 单 JAR 模式的 Linux 真实网络升级、快速重开竞态与中断恢复；Windows 两个公开自身发行的网络升级已完成，但没有启动 Minecraft。
 - 完整 Folkways 模组包、所选扩展及目标存档的升级后加载与重新打开。
 - 常用客户端启动器中的退出行为与错误提示；完整客户端重启仍需适配。
 - 真实 OpenList 后端的任务完成、写后读回、缓存、并发与最小权限账号。

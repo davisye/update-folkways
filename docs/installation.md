@@ -1,6 +1,6 @@
 # 安装与退出后更新
 
-新安装只需一个 NeoForge Mod JAR。需要 Java 21 与 NeoForge 1.21.1；先关闭实例，备份重要存档和配置。
+新安装只需一个 NeoForge Mod JAR。需要 Java 21、Minecraft 1.21.1 与 NeoForge 21.1.233 或更新版本；先关闭实例，备份重要存档和配置。
 
 ## 安装
 
@@ -12,21 +12,29 @@
 
 国内下载可在官方 Release 确认完整 JAR 名称后，使用 `https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<完整JAR文件名>`。首次下载属于人工信任步骤；运行时不能用镜像自己的摘要代替官方 API 与 CI 身份验证。
 
-本项目不代装 Minecraft、NeoForge、Folkways 或扩展的第三方前置 Mod。
+本项目不代装 Minecraft、NeoForge 或可选扩展的大型前置 Mod。空实例的默认基础安装包含同次发布的 Folkways Core、Vanilla，以及缺失的 LDLib2 2.2.37-all。Ponder、Flywheel、Starlark 已由上游内嵌，无需重复安装。
 
 ## 第一次运行会发生什么
 
-第一次加载你手工安装的现有版本，登记它的文件归属，并检查更新。没有现有配置的官方发行版默认 `localDevelopment=false`；已存在的配置保持原值。本地源码构建、NeoForge 开发环境及显式开发保护继续禁用自动更新。
+第一次加载你手工安装的 updater，登记其归属，并检查自身及 Folkways 更新。没有现有配置的官方发行版默认 `localDevelopment=false`；已存在的配置保持原值。本地源码构建、NeoForge 开发环境及显式开发保护继续禁用自动更新，包括前置依赖写入。
 
 下载通过验证后，游戏提示更新已准备。后台 helper 等待**整个游戏 JVM**退出，而不是只等待退出世界或集成服务器停止。你可以正常继续游戏，更新不会原地覆盖已加载文件。
 
 JVM 退出后，helper 重查其他游戏进程、开发保护、文件归属、待安装内容与事务状态，再安装。下一次照常启动即可加载新版本。
 
-## 不必为了自身更新配置 Folkways 签名
+需要更改仓库、渠道或模块时，在 **Mods → Folkways Development Updater → 配置** 修改。检查按钮会先保存，再在后台请求下载；主菜单可以显示状态与提示。无需为了触发首装先创建世界。
+
+## 默认来源无需配置密钥
 
 updater 自身固定使用本仓库的官方发布与成功 CI 构建。`selfUpdateEnabled=true` 时可检查自身，`selfUpdateChannel` 可选择 `nightly` 或 `release`。
 
-Folkways 的 `manifestUrl` 和 `publicKeys` 可以继续留空。这不影响 updater 自身检查，但表示 Folkways 自动更新未配置。公共 Folkways 自动签名发布仍延期；不要为了启用自身更新填写陌生密钥或未经验证的清单地址。
+Folkways 的 `manifestUrl` 留空时使用所选仓库官方 GitHub Release：核对资产摘要、固定提交、对应成功发布 CI，并保持一次安装内的模块来自同一构建。当前两源只有 nightly；选中尚未发行的渠道不会编造下载地址。
+
+首次自动安装要求实例内没有 Folkways JAR。发现已有手动或本地编译包时保留原文件，不静默建立受管归属。已经由此默认通道安装的文件，后续仍需与原归属摘要一致才能更新。
+
+只有运营方实际提供可信签名清单时才填写 `manifestUrl` 和 `publicKeys`，这会选择独立的 Ed25519 通道。公共自动签名发布仍延期；不要填写陌生密钥来绕过校验。
+
+Create、Modular Golems 和 Cookery 扩展需要已有兼容前置。缺少前置或版本不满足时，应先按提示安装对应 Mod，再选择扩展；更新器不会擅自替换这些前置包。
 
 ## 退出、重开与失败
 

@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "repository": "davisye/update-folkways",
+  "scenario": "official Folkways empty-set installation using real release bytes",
+  "passed": true,
+  "testMode": "Source injection with previously obtained official release/run snapshots and cached real JARs",
+  "checks": {
+    "firstInstallFromEmptyFolkwaysSet": true,
+    "baseModulesAndMissingLdlibInstalled": true,
+    "installedFolkwaysHashesMatchOfficialRelease": true,
+    "offlineApplyThenAlreadyCurrent": true
+  },
+  "sources": [
+    {
+      "repository": "IzakyL/folkways",
+      "commit": "7ca87b9cbfd479587871988fc3a7ff8bf056e8dc",
+      "stage": "Downloaded official Folkways [core, vanilla] + LDLib2; installs after the game JVM exits",
+      "apply": "Installed official Folkways and required dependencies",
+      "installed": [
+        {
+          "file": "folkways-core-neoforge-1.21.1-0.1.0.jar",
+          "sha256": "86bd21b1279acfb7bd3c5facadcac6ab0a26ea792d2eb1001a81a3702665eb46"
+        },
+        {
+          "file": "folkways-vanilla-neoforge-1.21.1-0.1.0.jar",
+          "sha256": "87aff10a753a0f4ade312deb12cc5cfdc950efb30a46beb9a07a4c7cf9a058dd"
+        },
+        {
+          "file": "ldlib2-neoforge-1.21.1-2.2.37-all.jar",
+          "sha256": "a3848cb43242c5367b984142e520ff8f4324ff67945b728e2a2b606846fc9484"
+        }
+      ],
+      "currentCheck": "Already installed official Folkways 7ca87b9cbfd479587871988fc3a7ff8bf056e8dc"
+    },
+    {
+      "repository": "davisye/folkways",
+      "commit": "a607d77459b12e3c0e8e0546a924157d89cc27bf",
+      "stage": "Downloaded official Folkways [core, vanilla] + LDLib2; installs after the game JVM exits",
+      "apply": "Installed official Folkways and required dependencies",
+      "installed": [
+        {
+          "file": "folkways-core-neoforge-1.21.1-0.1.0.jar",
+          "sha256": "e9573512e2b6317a569f9685c7e8edab51725df67ab7f09a661f8ab596a5bed2"
+        },
+        {
+          "file": "folkways-vanilla-neoforge-1.21.1-0.1.0.jar",
+          "sha256": "e32603ba4edb873f8e3c4f469f0070e6c1d5983aa4372058e1f82aacd0778d04"
+        },
+        {
+          "file": "ldlib2-neoforge-1.21.1-2.2.37-all.jar",
+          "sha256": "a3848cb43242c5367b984142e520ff8f4324ff67945b728e2a2b606846fc9484"
+        }
+      ],
+      "currentCheck": "Already installed official Folkways a607d77459b12e3c0e8e0546a924157d89cc27bf"
+    }
+  ],
+  "limits": {
+    "javaProductionTransportExercised": false,
+    "commitApiResponseWasGeneratedFixture": true,
+    "minecraftStarted": false,
+    "clientUiExercised": false,
+    "optionalExtensionsInstalled": false,
+    "powerLossDurabilityTested": false
+  }
+}

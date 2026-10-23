@@ -1,0 +1,38 @@
+{
+  "passed": true,
+  "repository": "IzakyL/folkways",
+  "commit": "7ca87b9cbfd479587871988fc3a7ff8bf056e8dc",
+  "minecraft": "1.21.1",
+  "neoforgeValidationVersion": "21.1.233",
+  "transport": "Default production Java HTTPS Transport; no injected API or asset fixture",
+  "networkPolicy": "mirror-first",
+  "routeInstrumentation": false,
+  "initialFolkwaysAndLDLib2Absent": true,
+  "stageLeftModsUnchanged": true,
+  "stagingJvmExitedBeforeInstallJvmStarted": true,
+  "separateJvmOfflineApply": true,
+  "officialRecheckAlreadyCurrent": true,
+  "installed": {
+    "folkways_core": {
+      "file": "folkways-core-neoforge-1.21.1-0.1.0.jar",
+      "sha256": "86bd21b1279acfb7bd3c5facadcac6ab0a26ea792d2eb1001a81a3702665eb46",
+      "version": "0.1.0",
+      "size": 3617681
+    },
+    "folkways_vanilla": {
+      "file": "folkways-vanilla-neoforge-1.21.1-0.1.0.jar",
+      "sha256": "87aff10a753a0f4ade312deb12cc5cfdc950efb30a46beb9a07a4c7cf9a058dd",
+      "version": "0.1.0",
+      "size": 1829259
+    },
+    "ldlib2": {
+      "file": "ldlib2-neoforge-1.21.1-2.2.37-all.jar",
+      "sha256": "a3848cb43242c5367b984142e520ff8f4324ff67945b728e2a2b606846fc9484",
+      "version": "2.2.37",
+      "size": 7215985
+    }
+  },
+  "pendingAndJournalCleared": true,
+  "minecraftStartedInThisNetworkScenario": false,
+  "dropinExitHelperUsedInThisNetworkScenario": false
+}
