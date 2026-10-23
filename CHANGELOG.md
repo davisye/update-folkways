@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.0-rc.1] - 2026-10-23
+
 ### Added
 
 - 独立 Java 21 Bootstrap 与 NeoForge 1.21.1 伴随 Mod。
@@ -13,6 +15,12 @@
 - OP 4 开发命令、正常停止、受监督专服重启及子进程门禁。
 - 逐 JAR 离线签名发布、不可变版本归档、latest 指针和本地目录发布恢复。
 - Windows/Linux CI 与官方更新器发布身份，固定 seed 的自身更新交接。
+
+### Fixed
+
+- 快速退出的子 JVM 不再因启动时间已不可读而误留启动门禁。
+- Windows 8.3 与根目录别名可正常接管；受管目录内 symlink/junction 仍拒绝。
+- GitHub 发布中断后通过授权分页发现同提交草稿，避免重复创建。
 
 ### Known limitations
 

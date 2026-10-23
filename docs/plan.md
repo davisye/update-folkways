@@ -24,9 +24,11 @@
 
 ## 4. 公开仓库、CI 与更新器自身更新
 
-**已有/正在发布：** Windows/Linux 验证、可信主分支 nightly 与版本 tag 发布、官方 GitHub/CI 自更新身份、固定 seed 和独立 helper 交接。
+**已有：** Windows/Linux 验证、可信主分支 nightly 与版本 tag 发布、官方 GitHub/CI 自更新身份、固定 seed 和独立 helper 交接。
 
-**验收：** 首次公开 Actions 实际成功；六个资产与元数据一致；从上一官方版本实际升级；开发构建受保护；失败时已有版本可继续启动。seed 协议 v1 仍由用户手动安装，不做自替换。
+**已验收：** 两次公开 Actions 与六附件 nightly 发布成功；Windows 使用旧 seed 从官方 6.1 实际升级到 7.1；默认开发保护有效，检查暂不可用时继续启动现有版本。详细版本与边界见 [验收记录](verification.md)。
+
+**后续：** Linux 网络升级与真实安装中断恢复矩阵。seed 协议 v1 仍由用户手动安装，不做自替换。
 
 ## 5. Folkways 签名镜像与 OpenList
 

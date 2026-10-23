@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "repository": "davisye/update-folkways",
+  "ci": {
+    "runId": "39953990440",
+    "commit": "218b9f6fb741b103c847b78a9516035f03257f3d",
+    "windows": {
+      "javaPassed": 55,
+      "javaSkipped": 0,
+      "pythonPassed": 43,
+      "realSeedSmoke": true
+    },
+    "linux": {
+      "javaPassed": 53,
+      "javaSkipped": 2,
+      "pythonPassed": 43,
+      "realSeedSmoke": true,
+      "skipReason": "Windows-only 8.3 and junction tests"
+    }
+  },
+  "selfUpdate": {
+    "passed": true,
+    "platform": "Windows Java 21",
+    "from": "0.1.0-nightly.6.1",
+    "to": "0.1.0-nightly.7.1",
+    "fromRun": "39953990440",
+    "toRun": "39954859064",
+    "oldSeedUsed": true,
+    "bothJarDigestsVerified": true,
+    "companionPathPreserved": true,
+    "runtimeDirectories": 0,
+    "childBarrier": false,
+    "folkwaysSigningConfigured": false,
+    "realMinecraftClientTested": false
+  },
+  "builds": [
+    {
+      "version": "0.1.0-nightly.6.1",
+      "commit": "218b9f6fb741b103c847b78a9516035f03257f3d",
+      "runId": "39953990440",
+      "runNumber": 6,
+      "runAttempt": 1,
+      "sequence": 6001,
+      "artifacts": [
+        {
+          "component": "bootstrap",
+          "fileName": "folkways-bootstrap-0.1.0-nightly.6.1-standalone.jar",
+          "sha256": "53f4762d15cac612030ebbd46f7b10d4b68b45a348f95275234d3c60500b8add",
+          "size": 353771,
+          "url": "https://github.com/davisye/update-folkways/releases/download/nightly/folkways-bootstrap-0.1.0-nightly.6.1-standalone.jar"
+        },
+        {
+          "component": "companion",
+          "fileName": "folkways-updater-neoforge-1.21.1-0.1.0-nightly.6.1.jar",
+          "sha256": "cdfe13b11c02e11bb529d4eee5cba59dc121d453d870b78f1a30ba77cbbf2370",
+          "size": 87418,
+          "url": "https://github.com/davisye/update-folkways/releases/download/nightly/folkways-updater-neoforge-1.21.1-0.1.0-nightly.6.1.jar"
+        }
+      ]
+    },
+    {
+      "version": "0.1.0-nightly.7.1",
+      "commit": "33cbd4ab994ece69274123027c6e82cf4afeecf5",
+      "runId": "39954859064",
+      "runNumber": 7,
+      "runAttempt": 1,
+      "sequence": 7001,
+      "artifacts": [
+        {
+          "component": "bootstrap",
+          "fileName": "folkways-bootstrap-0.1.0-nightly.7.1-standalone.jar",
+          "sha256": "2d36c7468d20445f60f93b6e90306fbab8b1aa33297381e26c164d2bc64af891",
+          "size": 353770,
+          "url": "https://github.com/davisye/update-folkways/releases/download/nightly/folkways-bootstrap-0.1.0-nightly.7.1-standalone.jar"
+        },
+        {
+          "component": "companion",
+          "fileName": "folkways-updater-neoforge-1.21.1-0.1.0-nightly.7.1.jar",
+          "sha256": "f4d96d86906cfc3fb072440b48f298b43f328080a978cbd3fbd57464ac4074a8",
+          "size": 87415,
+          "url": "https://github.com/davisye/update-folkways/releases/download/nightly/folkways-updater-neoforge-1.21.1-0.1.0-nightly.7.1.jar"
+        }
+      ]
+    }
+  ],
+  "cache": {
+    "pendingPresent": false,
+    "journalPresent": false,
+    "backupJarCount": 2,
+    "installedCompanionJarCount": 1,
+    "seedBytesUnchanged": true
+  },
+  "checks": [
+    "official API digests and successful CI provenance",
+    "first release six assets downloaded through github.davisye.cn",
+    "default local development leaves both JARs unchanged",
+    "initial unavailable check retained old files and launched foreground Java",
+    "self-check predownload followed by old seed installation",
+    "both installed JAR digests and embedded run identities match the next release",
+    "successful nightly publication prunes previous release assets"
+  ],
+  "limits": [
+    "isolated foreground Java process; no Minecraft client or real world in this upgrade test",
+    "Linux network cross-version upgrade and real installation interruption recovery remain to be tested",
+    "automated Folkways signing remains disabled",
+    "seed protocol v1 requires manual installation"
+  ]
+}

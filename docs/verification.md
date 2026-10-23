@@ -33,11 +33,19 @@
 - 官方 nightly `0.1.0-nightly.6.1` 的六个附件经国内镜像下载后，全部与官方 GitHub API 返回的 digest/size 一致；清单和两个 JAR 均关联到该成功 run。
 - Windows 隔离实例使用发布的 seed 完成首次接管并启动真实前台 Java；默认 `localDevelopment=true` 时两个 JAR 摘要不变，runtime 与子进程门禁正常清理。该烟测没有启动 Minecraft 或真实世界。
 
+### 两个官方版本的 Windows 自更新
+
+[第二次官方构建](https://github.com/davisye/update-folkways/actions/runs/39954859064) 通过双平台门禁并发布 `0.1.0-nightly.7.1` 后，在同一隔离实例使用 **6.1 的原 seed** 完成 `6.1 → 7.1`：先预下载，再由 helper 于子 JVM 启动前替换 Bootstrap 和伴随 Mod；随后真实前台 Java 正常退出。两个安装 JAR 的摘要及内嵌构建身份均匹配 7.1，伴随 Mod 保留原文件路径，安装目录只存在一份伴随 Mod。
+
+首次检查暂不可用时保留了旧文件并正常启动，后续 `self-check` 预下载和 seed 安装成功。成功后 pending、事务日志、runtime 和 child 门禁均清理，恢复备份保留一套双 JAR。Folkways 清单及公钥在整个自身更新实验中均为空。
+
+首轮官方报告中，Windows 的 55 项 Java 测试全部执行通过；Linux 通过 53 项、跳过 2 项 Windows 专用测试；两边均通过 43 项 Python 测试及实际 seed 烟测。真实 Windows CI 执行并通过了 8.3、根目录 junction 和受管链接拒绝回归。[机器可读验收记录](acceptance/2026-10-23-self-update.json) 保存版本、提交、run、摘要及测试边界；nightly 的历史附件按策略清理，不作为永久归档。
+
 ## 仍需目标环境验收
 
 - 完整 Folkways 模组包、所选扩展及目标存档的升级后加载与存档重开。
 - 常用客户端启动器的账号/会话参数接入；完整客户端 `/restart` 尚未实现。
-- 官方自更新首次公开发布后，Windows/Linux 安装、跨版本更新、失败回滚的端到端验证。
+- Linux 真实网络跨版本升级，以及 Windows/Linux 真实安装中断恢复矩阵。已通过的独立 Java 烟测不代替完整 Minecraft 升级。
 - 实际存储驱动的缓存失效、并发上传、异步任务、写后读回和最小权限账号。
 - 操作系统断电/磁盘故障、目录 fsync 与多文件事务耐久性；普通故障注入不能代替断电测试。
 
