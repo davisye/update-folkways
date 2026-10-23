@@ -3,11 +3,90 @@ import json
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools'))
 import dropin_smoke as smoke
 import self_release as release
+
+
+class FakeClock:
+    def __init__(self, wall_ms, advance_wall=True):
+        self.wall_ms = wall_ms
+        self.elapsed = 0
+        self.advance_wall = advance_wall
+        self.sleeps = []
+
+    def sleep(self, duration):
+        self.sleeps.append(duration)
+        self.elapsed += duration
+        if self.advance_wall:
+            self.wall_ms += round(duration * 1000)
+
+    def monotonic(self):
+        return self.elapsed
+
+    def time_ns(self):
+        return self.wall_ms * 1_000_000
+
+
+class NextJvmBoundaryTests(unittest.TestCase):
+    def wait(self, clock, marker=None, timeout=5):
+        marker = marker if marker is not None else {'finishedMillis': 1_000_000, 'clockAnomaly': False}
+        with patch.object(smoke, 'read_json', return_value=marker), \
+                patch.object(smoke.time, 'monotonic', side_effect=clock.monotonic), \
+                patch.object(smoke.time, 'time_ns', side_effect=clock.time_ns), \
+                patch.object(smoke.time, 'sleep', side_effect=clock.sleep):
+            return smoke.wait_for_new_jvm(Path('fixture'), timeout)
+
+    def test_waits_past_actual_commit_and_process_precision_before_the_next_start(self):
+        clock = FakeClock(1_000_010)
+        result = self.wait(clock)
+        self.assertGreater(clock.wall_ms, 1_000_000 + smoke.PROCESS_START_MARGIN_MS)
+        # Even a start reported one full second earlier remains after commit.
+        self.assertGreater(clock.wall_ms - 1000, result['finishedMillis'])
+        self.assertGreaterEqual(result['waitedMillis'], 1090)
+        self.assertTrue(clock.sleeps)
+        self.assertTrue(all(0 < delay <= 0.05 for delay in clock.sleeps))
+
+    def test_exact_boundary_still_waits_but_an_old_install_does_not(self):
+        exact = FakeClock(1_000_000 + smoke.PROCESS_START_MARGIN_MS)
+        self.wait(exact)
+        self.assertTrue(exact.sleeps)
+        old = FakeClock(1_002_000)
+        self.assertEqual(self.wait(old)['waitedMillis'], 0)
+        self.assertEqual(old.sleeps, [])
+
+    def test_stalled_wall_clock_has_a_bounded_monotonic_deadline(self):
+        clock = FakeClock(1_000_010, advance_wall=False)
+        with self.assertRaisesRegex(TimeoutError, 'clock boundary'):
+            self.wait(clock, timeout=0.2)
+        self.assertAlmostEqual(clock.elapsed, 0.2)
+        self.assertLessEqual(len(clock.sleeps), 5)
+
+    def test_invalid_future_or_anomalous_marker_fails_without_sleep_or_probe_retry(self):
+        for marker in ({'finishedMillis': True, 'clockAnomaly': False},
+                       {'finishedMillis': 0, 'clockAnomaly': False},
+                       {'finishedMillis': 1_000_000, 'clockAnomaly': True},
+                       {'finishedMillis': 1_000_000},
+                       {'finishedMillis': 1_000_001, 'clockAnomaly': False}, None):
+            with self.subTest(marker=marker):
+                clock = FakeClock(1_000_000)
+                with patch.object(smoke, 'read_json', return_value=marker), \
+                        patch.object(smoke.time, 'sleep', side_effect=clock.sleep), \
+                        patch.object(smoke.time, 'time_ns', side_effect=clock.time_ns):
+                    with self.assertRaises(ValueError):
+                        smoke.wait_for_new_jvm(Path('fixture'))
+                self.assertEqual(clock.sleeps, [])
+
+    def test_wall_clock_rollback_is_not_hidden_by_waiting(self):
+        with patch.object(smoke, 'read_json', return_value={'finishedMillis': 1_000_000, 'clockAnomaly': False}), \
+                patch.object(smoke.time, 'time_ns', side_effect=[1_000_010_000_000, 1_000_009_000_000]), \
+                patch.object(smoke.time, 'sleep') as sleeper:
+            with self.assertRaisesRegex(ValueError, 'backwards'):
+                smoke.wait_for_new_jvm(Path('fixture'))
+            sleeper.assert_not_called()
 
 
 class DropInSmokeFixtureTests(unittest.TestCase):

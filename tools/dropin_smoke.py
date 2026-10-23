@@ -19,6 +19,38 @@ import zipfile
 from self_release import BUILD_INFO, HELPER, REPOSITORY, WORKFLOW, canonical, digest, verify_archive, verify_directory
 
 ENTRYPOINT = 'dev.davisye.folkways.update.core.DropInUpdater$Helper'
+PROCESS_START_MARGIN_MS = 1100
+
+
+def wait_for_new_jvm(home, timeout=5):
+    """Start the next fixture JVM beyond coarse process-start clock precision.
+
+    The production guard deliberately rejects JVMs whose reported start precedes
+    an installation. A rapidly spawned Linux process can report a rounded start;
+    wait relative to the real commit marker, without retrying a failed probe.
+    """
+    mark = read_json(home / 'last-install.json')
+    finished = mark.get('finishedMillis') if isinstance(mark, dict) else None
+    if type(finished) is not int or finished <= 0 or mark.get('clockAnomaly') is not False:
+        raise ValueError('Unsafe installation completion marker for the next smoke JVM')
+    started = time.monotonic()
+    deadline = started + timeout
+    previous_wall = time.time_ns() // 1_000_000
+    if finished > previous_wall:
+        raise ValueError('Installation completion is in the future; smoke clock boundary is unsafe')
+    target = finished + PROCESS_START_MARGIN_MS
+    while True:
+        wall = time.time_ns() // 1_000_000
+        if wall < previous_wall:
+            raise ValueError('Wall clock moved backwards while waiting for the next smoke JVM')
+        previous_wall = wall
+        if wall > target:
+            return {'finishedMillis': finished, 'marginMillis': PROCESS_START_MARGIN_MS,
+                    'waitedMillis': int((time.monotonic() - started) * 1000)}
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Next smoke JVM did not pass the installation clock boundary')
+        time.sleep(min(0.05, remaining))
 
 
 def previous_identity(metadata):
@@ -131,8 +163,7 @@ def local_mode_update(executable, helper, base, source, metadata, environment):
     if (digest(folkways) != folkways_hash or digest(plan) != plan_hash or not marker.is_file()
             or read_json(home / 'config.json').get('localDevelopment') is not True):
         raise ValueError('Updater self-install changed local-mode Folkways files or its configuration')
-    if not (home / 'last-install.json').is_file():
-        raise ValueError('The actual self-install did not commit its completion marker')
+    boundary = wait_for_new_jvm(home)
     third = probe(executable, helper, game, companion, environment)
     if first.exists() or second.exists() or list((home / 'dropin-runtime').iterdir()) != [third]:
         raise ValueError('Local-mode self-install helper generations were not safely pruned')
@@ -145,6 +176,7 @@ def local_mode_update(executable, helper, base, source, metadata, environment):
             'installedSha256': artifact['sha256'], 'acceptedSequence': state['highest'],
             'folkwaysSentinelUnchanged': True, 'folkwaysPendingRetained': True,
             'previousHelperCleaned': True, 'postExitHelperRuns': 3,
+            'nextJvmBoundary': boundary,
             'scope': 'offline previously verified queue; official API verification is covered by core tests'}
 
 
