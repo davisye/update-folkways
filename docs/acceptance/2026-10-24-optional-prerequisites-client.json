@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "repository": "davisye/update-folkways",
+  "scenario": "select and save all optional integrations without any installed prerequisite in the actual NeoForge client",
+  "passed": true,
+  "environment": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.233",
+    "java": 21,
+    "platform": "Windows",
+    "artifactIdentity": "local development candidate; not a published release"
+  },
+  "checks": {
+    "factoryRegistered": true,
+    "missingOptionalPrerequisitesSelectable": true,
+    "allMissingPrerequisiteModulesClicked": true,
+    "allOptionalModulesSavedWithoutPrerequisites": true,
+    "saved": true,
+    "hiddenEditsPreserved": true,
+    "legacyMarkerIgnoredWhenDisabled": true,
+    "explicitLocalModeEnabled": true,
+    "independentSelfCheckCompleted": true,
+    "selfCheckHasNoInstalledJarTarget": true,
+    "folkwaysCheckSkippedInLocalMode": true,
+    "factoryBackClosesToParent": true
+  },
+  "savedModules": [
+    "core",
+    "vanilla",
+    "create",
+    "modulargolems",
+    "cookery"
+  ],
+  "visualChecks": {
+    "basicAndAdvancedScreensInspected": true,
+    "controlsInsideScreen": true
+  },
+  "limits": {
+    "networkDownloadsInThisScenario": false,
+    "prerequisitesInstalledInThisScenario": false,
+    "fullPackLoadedInThisScenario": false,
+    "actualUserGameModified": false
+  }
+}

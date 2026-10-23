@@ -11,11 +11,21 @@ import java.util.zip.*;
 final class ModMetadata {
     final Map<String,String> mods = new TreeMap<>(), provided = new TreeMap<>();
     final List<Dependency> required = new ArrayList<>();
+    final List<Bundle> bundles = new ArrayList<>();
     String loader;
     static final class Dependency { String owner, id, range; }
+    static final class Bundle { String id, version, range; final Map<String,String> mods = new TreeMap<>(); }
     private static final Pattern ASSIGN = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*([\"'])(.*?)\\2\\s*(?:#.*)?");
 
     static ModMetadata read(byte[] jar) throws Exception { return read(jar, 0, new long[2]); }
+    static ModMetadata installedWithDependencies(java.nio.file.Path path) throws Exception {
+        if (java.nio.file.Files.size(path) > 64L * 1024 * 1024) throw new IOException("Required Mod exceeds the installation size limit");
+        try (InputStream input = java.nio.file.Files.newInputStream(path)) {
+            byte[] bytes = input.readNBytes(64 * 1024 * 1024 + 1);
+            if (bytes.length > 64 * 1024 * 1024) throw new IOException("Required Mod exceeds the installation size limit");
+            return read(bytes);
+        }
+    }
     static ModMetadata installed(java.nio.file.Path path) throws Exception {
         ModMetadata result = new ModMetadata();
         try (ZipFile zip = new ZipFile(path.toFile())) {
@@ -61,12 +71,25 @@ final class ModMetadata {
             var json = com.google.gson.JsonParser.parseString(new String(jarjar, StandardCharsets.UTF_8)).getAsJsonObject();
             if (!json.has("jars") || json.getAsJsonArray("jars").size() > 64) throw new IOException("Invalid nested Mod catalogue");
             for (var item : json.getAsJsonArray("jars")) {
-                String path = item.getAsJsonObject().get("path").getAsString();
+                var declaration = item.getAsJsonObject();
+                String path = declaration.get("path").getAsString();
                 if (!path.matches("META-INF/jarjar/[A-Za-z0-9._+\\-]+\\.jar") || !relevant.containsKey(path)) throw new IOException("Invalid nested Mod path");
+                // Older synthetic metadata omitted these fields. Actual JarJar declarations must include both together.
+                Bundle declared = null;
+                if (declaration.has("identifier") || declaration.has("version")) {
+                    var identity = declaration.getAsJsonObject("identifier"); var versions = declaration.getAsJsonObject("version");
+                    Bundle bundle = new Bundle(); bundle.id = identity.get("group").getAsString() + ":" + identity.get("artifact").getAsString();
+                    bundle.version = versions.get("artifactVersion").getAsString(); bundle.range = versions.get("range").getAsString();
+                    if (bundle.id.length() > 256 || bundle.version.length() > 256 || bundle.range.length() > 256) throw new IOException("Invalid JarJar declaration");
+                    result.bundles.add(bundle);
+                    declared = bundle;
+                }
                 ModMetadata nested = read(relevant.get(path), depth + 1, budget);
+                if (declared != null) declared.mods.putAll(nested.mods);
                 for (var mod : nested.mods.entrySet()) result.provided.merge(mod.getKey(), mod.getValue(), ModMetadata::higher);
                 for (var mod : nested.provided.entrySet()) result.provided.merge(mod.getKey(), mod.getValue(), ModMetadata::higher);
                 result.required.addAll(nested.required);
+                result.bundles.addAll(nested.bundles);
             }
         }
         return result;
@@ -123,12 +146,13 @@ final class ModMetadata {
     }
     private static String higher(String a, String b) { try { return compare(a, b) >= 0 ? a : b; } catch (IOException e) { return a; } }
     static int compare(String a, String b) throws IOException {
+        if (Objects.equals(a, b)) return 0;
         // Audit targets use numeric Maven versions with loader/build suffixes. Unknown syntax fails closed.
         Pattern version = Pattern.compile("([0-9]+(?:\\.[0-9]+)*)(?:[-+][A-Za-z0-9._+\\-]+)?");
         Matcher am = version.matcher(a), bm = version.matcher(b);
         if (!am.matches() || !bm.matches()) throw new IOException("Unsupported dependency version syntax");
         for (String suffix : List.of(a.substring(am.group(1).length()), b.substring(bm.group(1).length()))) {
-            if (!suffix.isEmpty() && !suffix.matches("(?i)(?:-neoforge)?(?:\\+mc1\\.21\\.1)?") && !suffix.matches("(?i)-(?:alpha|beta|rc|snapshot)[0-9._-]*")) throw new IOException("Unsupported dependency version qualifier");
+            if (!suffix.isEmpty() && !suffix.matches("(?i)(?:-neoforge)?(?:\\+(?:mc1\\.21\\.1|[0-9]+))?") && !suffix.matches("(?i)-(?:alpha|beta|rc|snapshot)[0-9._-]*")) throw new IOException("Unsupported dependency version qualifier");
         }
         String[] av = am.group(1).split("\\."), bv = bm.group(1).split("\\.");
         for (int i = 0; i < Math.max(av.length, bv.length); i++) {
@@ -139,6 +163,33 @@ final class ModMetadata {
         boolean bpre = b.toLowerCase(Locale.ROOT).matches(".*-(?:alpha|beta|rc|snapshot)[0-9._-]*.*");
         if (apre != bpre) return apre ? -1 : 1;
         if (apre && !a.equals(b)) throw new IOException("Unsupported prerelease dependency comparison");
+        String asuffix = a.substring(am.group(1).length()), bsuffix = b.substring(bm.group(1).length());
+        boolean anumeric = asuffix.matches("\\+[0-9]+"), bnumeric = bsuffix.matches("\\+[0-9]+");
+        if (anumeric || bnumeric) {
+            if ((!asuffix.isEmpty() && !anumeric) || (!bsuffix.isEmpty() && !bnumeric)) throw new IOException("Unsupported mixed dependency build qualifiers");
+            return new java.math.BigInteger(anumeric ? asuffix.substring(1) : "0").compareTo(new java.math.BigInteger(bnumeric ? bsuffix.substring(1) : "0"));
+        }
         return 0;
+    }
+    static Map<String,Set<String>> validateBundles(Collection<ModMetadata> metadata) throws IOException {
+        Map<String,List<Bundle>> groups = new TreeMap<>(); Map<String,Set<String>> provided = new TreeMap<>(); Set<String> declaredMods = new HashSet<>();
+        for (ModMetadata info : metadata) for (Bundle bundle : info.bundles) {
+            groups.computeIfAbsent(bundle.id, ignored -> new ArrayList<>()).add(bundle); declaredMods.addAll(bundle.mods.keySet());
+        }
+        for (var group : groups.entrySet()) {
+            boolean found = false;
+            for (Bundle candidate : group.getValue()) {
+                boolean compatible = true;
+                for (Bundle declaration : group.getValue()) if (!matches(candidate.version, declaration.range)) { compatible = false; break; }
+                if (compatible) {
+                    found = true;
+                    candidate.mods.forEach((id, version) -> provided.computeIfAbsent(id, ignored -> new TreeSet<>()).add(version));
+                }
+            }
+            if (!found) throw new IOException("Bundled library versions conflict: " + group.getKey());
+        }
+        // Compatibility for older fixtures/declarations with only a path; real audited JarJar entries have identities.
+        for (ModMetadata info : metadata) info.provided.forEach((id, version) -> { if (!declaredMods.contains(id)) provided.computeIfAbsent(id, ignored -> new TreeSet<>()).add(version); });
+        return provided;
     }
 }

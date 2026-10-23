@@ -19,8 +19,8 @@
   "folkways_updater.config.commands_help": "Enable /restart and /shutdown for permission level 4. Full client restart is not supported; dedicated servers restart after saving.",
   "folkways_updater.config.more": "More settings...",
   "folkways_updater.config.module": "%s %s",
-  "folkways_updater.config.module_help": "Optional integration; requires %s. Version compatibility is checked before staging.",
-  "folkways_updater.config.module_missing": "Install %s first to enable this optional integration.",
+  "folkways_updater.config.module_help": "Optional integration requiring %s. Compatible installed prerequisites are reused; conflicting manual files are retained.",
+  "folkways_updater.config.module_missing": "Select to download missing %s and its required dependencies together. They install after the game exits.",
   "folkways_updater.config.poll": "Check every %s seconds",
   "folkways_updater.config.self_channel": "Updater channel: %s",
   "folkways_updater.config.region": "Region preference: %s",
@@ -57,5 +57,6 @@
   "folkways_updater.config.self_help": "Update this updater independently of local development mode. Local mode does not disable self-updates.",
   "folkways_updater.status.self_no_target": "This IDE run has no installed updater JAR to replace.",
   "folkways_updater.status.self_verification_unavailable": "Official updater verification is unavailable; current updater retained. Folkways checks remain independent.",
-  "folkways_updater.status.settings_changed": "Settings applied; Folkways and updater checks follow their independent switches."
+  "folkways_updater.status.settings_changed": "Settings applied; Folkways and updater checks follow their independent switches.",
+  "folkways_updater.status.dependency_conflict": "Prerequisite %s conflicts: installed %s, required %s. Files retained; resolve the conflict and check again."
 }

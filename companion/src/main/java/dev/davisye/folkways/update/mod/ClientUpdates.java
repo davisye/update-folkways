@@ -1,6 +1,7 @@
 package dev.davisye.folkways.update.mod;
 
 import dev.davisye.folkways.update.core.Config;
+import dev.davisye.folkways.update.core.DependencyConflictException;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -111,6 +112,9 @@ public final class ClientUpdates {
     }
 
     private static String failure(Exception error) {
+        if (error instanceof DependencyConflictException conflict)
+            return Component.translatable("folkways_updater.status.dependency_conflict", dependencyName(conflict.id),
+                    conflict.version, conflict.requiredRange).getString();
         String reason = error.getMessage();
         if (reason != null && reason.startsWith("Official verification is temporarily unavailable"))
             return text("official_unavailable").getString();
@@ -119,6 +123,17 @@ public final class ClientUpdates {
                 || reason.startsWith("Installed dependency ") || reason.startsWith("Local mode or updater configuration changed")))
             return reason;
         return text("folkways_error").getString();
+    }
+
+    private static String dependencyName(String id) {
+        return switch (id) {
+            case "create" -> "Create";
+            case "modulargolems" -> "Modular Golems";
+            case "kaleidoscope_cookery" -> "Kaleidoscope Cookery";
+            case "ldlib2" -> "LDLib2";
+            case "l2library" -> "L2Library";
+            default -> id;
+        };
     }
 
     private static String readable(String result) {

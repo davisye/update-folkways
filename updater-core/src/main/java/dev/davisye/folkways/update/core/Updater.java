@@ -20,6 +20,7 @@ public final class Updater {
     private final Fetcher injected;
     final String loaderVersion;
     GitHubFolkways.Source githubSource;
+    ApprovedDependencies.Catalog approvedDependencies; // Package-private fixture injection; production always uses the immutable catalogue.
     interface InstallGate { void check() throws Exception; void committed() throws Exception; }
     InstallGate installGate;
     private void installCheck() throws Exception { if (installGate != null) installGate.check(); }

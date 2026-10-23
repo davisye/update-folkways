@@ -11,16 +11,14 @@ import java.util.zip.ZipException;
 final class GitHubFolkways {
     static final String JOURNAL = "github-folkways-journal.json";
     private static final String STATE = "github-folkways-state.json", PENDING = "github-folkways-pending";
-    private static final String LD_API = "https://api.modrinth.com/v2/version/bpcbGDy4";
-    private static final String LD_URL = "https://cdn.modrinth.com/data/B1CBVXHX/versions/bpcbGDy4/ldlib2-neoforge-1.21.1-2.2.37-all.jar";
-    private static final String LD_HASH = "46114d746ed045bf9bfdab87877436bc24f3120362b89256aa4749ff794691988f58b694208aca4297f5042fd24cb3387590b9bc20b28d708c6e246aaa669c7b";
-    private static final long LD_SIZE = 7215985, LIMIT = 64L * 1024 * 1024;
+    private static final long LIMIT = 64L * 1024 * 1024;
     interface Source {
         byte[] official(String url, long maximum) throws Exception;
         byte[] asset(String url, long size, String algorithm, String hash) throws Exception;
     }
     private final Updater u;
-    GitHubFolkways(Updater updater) { u = updater; }
+    private final ApprovedDependencies.Catalog catalog;
+    GitHubFolkways(Updater updater) { u = updater; catalog = updater.approvedDependencies == null ? ApprovedDependencies.PRODUCTION : updater.approvedDependencies; }
     private Source source(Config config) {
         if (u.githubSource != null) return u.githubSource;
         Transport transport = new Transport(config);
@@ -55,7 +53,8 @@ final class GitHubFolkways {
             long sequence = sequence(run); String fingerprint = fingerprint(release);
             long accepted = before.highWater.getOrDefault(config.scope(), 0L);
             if (sequence < accepted || sequence == accepted && !fingerprint.equals(before.accepted.get(config.scope()))) throw new IOException("Official release is older or changed within the same CI build");
-            if (sequence == accepted && config.scope().equals(before.scope) && currentSelection(before, config)) return "Already installed official Folkways " + commit.sha;
+            if (sequence == accepted && config.scope().equals(before.scope) && currentSelection(before, config)
+                && existingClosureComplete(before, installed, config)) return "Already installed official Folkways " + commit.sha;
             if (before.pending != null) {
                 try {
                     Plan old = pending(before, false);
@@ -66,8 +65,7 @@ final class GitHubFolkways {
             Plan plan = new Plan(); plan.schema = 1; plan.repository = config.repository; plan.minecraft = config.minecraft; plan.channel = config.channel;
             plan.modules = new ArrayList<>(config.modules); plan.loaderVersion = u.loaderVersion; plan.release = release; plan.run = run;
             plan.sequence = sequence; plan.commit = commit.sha; plan.fingerprint = fingerprint;
-            Map<String,byte[]> bytes = new TreeMap<>(); Map<String,ModMetadata> metadata = new TreeMap<>();
-            Map<String,String> provided = new TreeMap<>();
+            Map<String,byte[]> bytes = new TreeMap<>(); Resolver resolver = new Resolver(plan, installed);
             for (String module : config.modules) {
                 managed(config); Asset asset = all.get(module);
                 byte[] data = source.asset(asset.browser_download_url, asset.size, "SHA-256", digest(asset)); verifyHash(data, "SHA-256", digest(asset), asset.size); managed(config);
@@ -77,34 +75,9 @@ final class GitHubFolkways {
                 String version = info.mods.get(id);
                 if (!asset.name.equals("folkways-" + module + "-neoforge-1.21.1-" + version + ".jar")) throw new IOException("Folkways asset filename/version mismatch");
                 File item = file(id, asset.name, asset.browser_download_url, data, before); item.version = version;
-                plan.files.add(item); bytes.put(id, data); metadata.put(id, info); provided.putAll(info.mods); provided.putAll(info.provided);
+                plan.files.add(item); bytes.put(id, data); resolver.add(info, null);
             }
-            // Existing unrelated libraries satisfy requirements read-only. They never become owned implicitly.
-            for (var existing : installed.entrySet()) if (!folkways(existing.getKey())) provided.putIfAbsent(existing.getKey(), existing.getValue().version);
-            List<ModMetadata.Dependency> requirements = new ArrayList<>(); metadata.values().forEach(info -> requirements.addAll(info.required));
-            for (int cursor = 0; cursor < requirements.size(); cursor++) {
-                ModMetadata.Dependency dependency = requirements.get(cursor);
-                if (dependency.id.equals("minecraft")) {
-                    if (!ModMetadata.matches("1.21.1", dependency.range)) throw new IOException("This Folkways build does not support Minecraft 1.21.1"); continue;
-                }
-                if (dependency.id.equals("neoforge")) {
-                    if (!ModMetadata.matches(plan.loaderVersion, dependency.range)) throw new IOException("Folkways requires NeoForge " + dependency.range + "; current version is " + plan.loaderVersion); continue;
-                }
-                String version = provided.get(dependency.id);
-                if (version != null) {
-                    if (!ModMetadata.matches(version, dependency.range)) throw new IOException("Installed dependency " + dependency.id + " " + version + " does not satisfy " + dependency.range + "; it will not be overwritten");
-                    Present existing = installed.get(dependency.id);
-                    if (existing != null && !before.owned.containsKey(dependency.id) && plan.external.stream().noneMatch(x -> x.id.equals(dependency.id))) plan.external.add(external(dependency.id, existing));
-                    continue;
-                }
-                if (!dependency.id.equals("ldlib2") || !ModMetadata.matches("2.2.37", dependency.range)) throw new IOException("Required dependency " + dependency.id + " " + dependency.range + " is missing; install a compatible official Mod before selecting this extension");
-                managed(config); Modrinth library = decode(source.official(LD_API, 1024 * 1024), Modrinth.class); validateLibrary(library);
-                managed(config); byte[] data = source.asset(LD_URL, LD_SIZE, "SHA-512", LD_HASH); verifyHash(data, "SHA-512", LD_HASH, LD_SIZE); managed(config);
-                ModMetadata info = ModMetadata.read(data);
-                if (!info.mods.equals(Map.of("ldlib2", "2.2.37"))) throw new IOException("LDLib2 file has unexpected Mod identity/version");
-                File item = file("ldlib2", "ldlib2-neoforge-1.21.1-2.2.37-all.jar", LD_URL, data, before); item.version = "2.2.37";
-                plan.files.add(item); plan.library = library; bytes.put("ldlib2", data); provided.putAll(info.mods); provided.putAll(info.provided); requirements.addAll(info.required);
-            }
+            resolver.resolve(source, config, before, bytes);
             Release finalRelease = release(source, config); releaseAssets(finalRelease, config);
             if (!fingerprint.equals(fingerprint(finalRelease))) throw new IOException("Official release changed while downloading; previous files were retained");
             validatePlan(plan, config); managed(config); validateOwned(state(), scan());
@@ -124,7 +97,7 @@ final class GitHubFolkways {
                 }
                 u.clear(previous);
             } finally { u.clear(candidate); }
-            return "Downloaded official Folkways " + config.modules + (plan.library != null ? " + LDLib2" : "") + "; installs after the game JVM exits";
+            return "Downloaded official Folkways " + config.modules + (plan.libraries.isEmpty() ? "" : " + required dependencies " + plan.libraries.keySet()) + "; installs after the game JVM exits";
         });
     }
 
@@ -226,12 +199,12 @@ final class GitHubFolkways {
         Path path = u.home.resolve(STATE); if (!Files.exists(path)) return new State();
         State state = read(path, State.class); validateState(state); return state;
     }
-    private static void validateState(State state) throws IOException {
-        if (state == null || state.owned == null || state.highWater == null || state.accepted == null || state.owned.size() > 16) throw new IOException("Invalid official Folkways ownership state");
+    private void validateState(State state) throws IOException {
+        if (state == null || state.owned == null || state.highWater == null || state.accepted == null || state.owned.size() > catalog.size() + Updater.MODULES.size()) throw new IOException("Invalid official Folkways ownership state");
         Set<String> names = new HashSet<>();
         for (var entry : state.owned.entrySet()) {
             Owned item = entry.getValue();
-            if (!folkways(entry.getKey()) && !entry.getKey().equals("ldlib2") || item == null || !Updater.hash(item.sha256) || item.size <= 0 || item.size > LIMIT) throw new IOException("Invalid official Folkways owned artifact");
+            if (!folkways(entry.getKey()) && catalog.get(entry.getKey()) == null || item == null || !Updater.hash(item.sha256) || item.size <= 0 || item.size > LIMIT) throw new IOException("Invalid official Folkways owned artifact");
             Updater.fileName(item.file); if (!names.add(item.file.toLowerCase(Locale.ROOT))) throw new IOException("Duplicate owned filename");
         }
     }
@@ -249,14 +222,123 @@ final class GitHubFolkways {
                 try { info = ModMetadata.installed(path); }
                 catch (ZipException e) { if (path.getFileName().toString().startsWith("folkways-")) throw e; else continue; }
                 if (path.getFileName().toString().startsWith("folkways-") && !path.getFileName().toString().startsWith("folkways-updater-") && info.mods.keySet().stream().noneMatch(GitHubFolkways::folkways)) throw new IOException("Unrecognized Folkways-named JAR is protected: " + path.getFileName());
+                boolean relevant = info.mods.keySet().stream().anyMatch(id -> folkways(id) || catalog.get(id) != null);
+                if (relevant) info = ModMetadata.installedWithDependencies(path);
+                boolean fromFolkways = info.mods.keySet().stream().anyMatch(GitHubFolkways::folkways);
                 for (var mod : info.mods.entrySet()) {
-                    if (!folkways(mod.getKey()) && !mod.getKey().equals("ldlib2") && !Set.of("create", "modulargolems", "kaleidoscope_cookery", "ponder", "flywheel").contains(mod.getKey())) continue;
-                    Present value = new Present(); value.file = path.getFileName().toString(); value.version = mod.getValue(); value.size = Files.size(path); value.sha256 = Updater.sha(u.readBounded(path, LIMIT));
-                    if (result.putIfAbsent(mod.getKey(), value) != null) throw new IOException("Duplicate installed Mod: " + mod.getKey());
+                    Present value = present(path, mod.getValue(), info, false, fromFolkways);
+                    Present previous = result.get(mod.getKey());
+                    if (previous != null && !previous.nested) throw new IOException("Duplicate installed Mod: " + mod.getKey());
+                    result.put(mod.getKey(), value);
+                }
+                if (!fromFolkways) for (var mod : info.provided.entrySet()) {
+                    Present value = present(path, mod.getValue(), info, true, false), previous = result.get(mod.getKey());
+                    if (previous == null || previous.nested && ModMetadata.compare(value.version, previous.version) > 0) result.put(mod.getKey(), value);
                 }
             }
         }
         return result;
+    }
+    private Present present(Path path, String version, ModMetadata metadata, boolean nested, boolean fromFolkways) throws Exception {
+        Present value = new Present(); value.file = path.getFileName().toString(); value.version = version; value.size = Files.size(path);
+        value.metadata = metadata; value.nested = nested; value.fromFolkways = fromFolkways;
+        // Unrelated large Mods are metadata-only until they are actually required.
+        if (fromFolkways || metadata.mods.keySet().stream().anyMatch(id -> catalog.get(id) != null)) value.sha256 = Updater.sha(u.readBounded(path, LIMIT));
+        return value;
+    }
+    private void bind(Present value) throws Exception {
+        if (value.sha256 != null) return;
+        Path path = u.mods.resolve(value.file); u.safe(path); byte[] bytes = u.readBounded(path, LIMIT);
+        value.sha256 = Updater.sha(bytes); value.size = bytes.length; value.metadata = ModMetadata.read(bytes);
+    }
+    private boolean existingClosureComplete(State state, Map<String,Present> installed, Config config) throws Exception {
+        Plan current = new Plan(); current.loaderVersion = u.loaderVersion;
+        Resolver resolver = new Resolver(current, installed);
+        for (String module : config.modules) {
+            Present present = installed.get("folkways_" + module); if (present == null) return false;
+            resolver.add(present.metadata, null);
+        }
+        return resolver.resolve(null, config, state, null);
+    }
+    private final class Resolver {
+        final Plan plan; final Map<String,Present> installed;
+        final Map<String,String> provided = new TreeMap<>(); final Set<String> top = new HashSet<>(), usedExisting = new HashSet<>();
+        final List<ModMetadata> metadata = new ArrayList<>(); final List<ModMetadata.Dependency> requirements = new ArrayList<>();
+        Resolver(Plan plan, Map<String,Present> installed) { this.plan = plan; this.installed = installed; }
+        void add(ModMetadata info, Present existing) throws Exception {
+            metadata.add(info); requirements.addAll(info.required);
+            if (metadata.size() > 128 || requirements.size() > 2048) throw new IOException("Dependency closure exceeds limits");
+            for (var mod : info.mods.entrySet()) {
+                if (top.contains(mod.getKey()) && !Objects.equals(provided.get(mod.getKey()), mod.getValue())) throw new IOException("Conflicting top-level dependency: " + mod.getKey());
+                top.add(mod.getKey()); provided.put(mod.getKey(), mod.getValue());
+            }
+            for (var mod : info.provided.entrySet()) if (!top.contains(mod.getKey())) {
+                String previous = provided.get(mod.getKey());
+                if (previous == null || ModMetadata.compare(mod.getValue(), previous) > 0) provided.put(mod.getKey(), mod.getValue());
+            }
+        }
+        boolean resolve(Source source, Config config, State before, Map<String,byte[]> bytes) throws Exception {
+            int cursor = 0;
+            while (true) {
+              for (; cursor < requirements.size(); cursor++) {
+                var dependency = requirements.get(cursor);
+                if (platform(dependency)) continue;
+                Present external = installed.get(dependency.id);
+                if (external != null && !external.fromFolkways) {
+                    if (!external.nested && !ModMetadata.matches(external.version, dependency.range)) throw new DependencyConflictException(dependency.id, external.version, dependency.range);
+                    useExisting(dependency.id, external, before);
+                }
+                if (provided.containsKey(dependency.id)) continue;
+                ApprovedDependencies.Pin pin = catalog.get(dependency.id);
+                if (pin == null || !ModMetadata.matches(pin.mods().get(dependency.id), dependency.range)) throw new IOException("Required dependency " + dependency.id + " " + dependency.range + " is missing and has no compatible audited download");
+                if (source == null) return false;
+                managed(config); Modrinth proof = decode(source.official(pin.api(), 1024 * 1024), Modrinth.class); pin.validate(proof);
+                managed(config); byte[] data = source.asset(pin.url(), pin.size(), "SHA-512", pin.sha512()); managed(config);
+                ModMetadata info = ModMetadata.read(data); pin.validateJar(data, info);
+                File item = file(pin.id(), pin.name(), pin.url(), data, before); item.version = info.mods.get(pin.id());
+                plan.files.add(item); plan.libraries.put(pin.id(), proof); if (pin.id().equals("ldlib2")) plan.library = proof;
+                bytes.put(pin.id(), data); add(info, null);
+              }
+              boolean added = false;
+              // FML gives a top-level Mod precedence over a JarJar Mod even without a TOML dependency on it.
+              for (String id : new ArrayList<>(provided.keySet())) {
+                  Present external = installed.get(id);
+                  if (external != null && !external.nested && !external.fromFolkways && !usedExisting.contains(external.file)) {
+                      useExisting(id, external, before); added = true;
+                  }
+              }
+              if (!added) break;
+            }
+            Map<String,Set<String>> candidates = ModMetadata.validateBundles(metadata);
+            for (ModMetadata info : metadata) for (var bundle : info.bundles) for (var mod : bundle.mods.entrySet()) {
+                Present actual = installed.get(mod.getKey());
+                if (actual != null && !actual.nested && !actual.fromFolkways) {
+                    if (!bundle.version.equals(mod.getValue())) throw new IOException("Cannot prove the version of a top-level bundled-library override: " + mod.getKey());
+                    if (!ModMetadata.matches(actual.version, bundle.range)) throw new DependencyConflictException(mod.getKey(), actual.version, bundle.range);
+                }
+            }
+            for (var dependency : requirements) if (!platform(dependency)) {
+                Set<String> versions = top.contains(dependency.id) ? Set.of(provided.get(dependency.id)) : candidates.getOrDefault(dependency.id, Set.of());
+                if (versions.isEmpty()) throw new IOException("Bundled dependency is unavailable: " + dependency.id);
+                for (String version : versions) if (!ModMetadata.matches(version, dependency.range)) throw new DependencyConflictException(dependency.id, version, dependency.range);
+            }
+            return true;
+        }
+        void useExisting(String id, Present external, State before) throws Exception {
+            if (!usedExisting.add(external.file)) return;
+            bind(external); add(external.metadata, external);
+            boolean owned = before.owned.values().stream().anyMatch(o -> o.file.equals(external.file));
+            if (!owned) plan.external.add(external(id, external));
+        }
+        boolean platform(ModMetadata.Dependency dependency) throws Exception {
+            if (dependency.id.equals("minecraft")) {
+                if (!ModMetadata.matches("1.21.1", dependency.range)) throw new IOException("This Folkways build does not support Minecraft 1.21.1"); return true;
+            }
+            if (dependency.id.equals("neoforge")) {
+                if (!ModMetadata.matches(plan.loaderVersion, dependency.range)) throw new IOException("Folkways requires NeoForge " + dependency.range + "; current version is " + plan.loaderVersion); return true;
+            }
+            return false;
+        }
     }
     private void validateOwned(State state, Map<String,Present> installed) throws Exception {
         for (String id : installed.keySet()) if (folkways(id) && !state.owned.containsKey(id)) throw new IOException("Existing Folkways JAR is not owned by this updater; local/manual files will not be replaced");
@@ -281,15 +363,21 @@ final class GitHubFolkways {
         Plan plan = decode(bytes, Plan.class); Config config = Config.load(u.game);
         if (requireCurrent && !sameScope(plan, config)) throw new DifferentSelection();
         validatePlan(plan, null);
+        Plan closure = new Plan(); closure.loaderVersion = plan.loaderVersion; Resolver resolver = new Resolver(closure, scan());
         for (File file : plan.files) {
             byte[] jar = u.readBounded(directory.resolve(file.id + ".jar"), LIMIT); Updater.verify(jar, file.sha256, file.size);
             ModMetadata info = ModMetadata.read(jar);
             if (!file.version.equals(info.mods.get(file.id))) throw new IOException("Cached Mod identity/version mismatch");
-            if (file.id.equals("ldlib2")) verifyHash(jar, "SHA-512", LD_HASH, LD_SIZE);
+            ApprovedDependencies.Pin pin = catalog.get(file.id);
+            if (pin != null) pin.validateJar(jar, info);
+            resolver.add(info, null);
         }
         for (External external : plan.external) {
             Updater.fileName(external.file); Updater.verify(u.readBounded(u.mods.resolve(external.file), LIMIT), external.sha256, external.size);
         }
+        if (!resolver.resolve(null, configFor(plan), state, null)) throw new IOException("Cached dependency closure is incomplete");
+        for (External actual : closure.external) if (plan.external.stream().noneMatch(e -> e.file.equals(actual.file) && e.sha256.equals(actual.sha256) && e.size == actual.size))
+            throw new IOException("Cached plan depends on an unrecorded external Mod");
         return plan;
     }
     private void restorePending(State state) throws Exception {
@@ -298,28 +386,41 @@ final class GitHubFolkways {
         try { pendingAt(queued, state, false); u.clear(previous); }
         catch (Exception e) { pendingAt(previous, state, false); u.clear(queued); Files.move(previous, queued, StandardCopyOption.ATOMIC_MOVE); }
     }
-    private static void validatePlan(Plan plan, Config current) throws Exception {
+    private void validatePlan(Plan plan, Config current) throws Exception {
         if (plan == null || plan.schema != 1 || !Set.of("IzakyL/folkways", "davisye/folkways").contains(plan.repository) || !"1.21.1".equals(plan.minecraft)
             || plan.modules == null || !plan.modules.containsAll(List.of("core", "vanilla")) || new HashSet<>(plan.modules).size() != plan.modules.size() || !Updater.MODULES.containsAll(plan.modules)
-            || plan.files == null || plan.files.size() < 2 || plan.files.size() > 6 || plan.external == null || plan.external.size() > 16 || plan.loaderVersion == null
+            || plan.files == null || plan.files.size() < 2 || plan.files.size() > Updater.MODULES.size() + catalog.size() || plan.external == null || plan.external.size() > 64 || plan.loaderVersion == null
             || plan.release == null || plan.run == null || !Objects.equals(plan.commit, plan.release.target_commitish)) throw new IOException("Invalid official Folkways install plan");
-        Config config = new Config(); config.repository = plan.repository; config.channel = plan.channel; config.modules = plan.modules; config.validate();
+        Config config = configFor(plan); config.validate();
         if (current != null && !sameScope(plan, current)) throw new DifferentSelection();
         Map<String,Asset> assets = releaseAssets(plan.release, config);
         verifyRun(plan.run, plan.release, plan.repository);
         if (sequence(plan.run) != plan.sequence || !fingerprint(plan.release).equals(plan.fingerprint)) throw new IOException("Cached official CI/release proof changed");
-        Set<String> ids = new HashSet<>(), names = new HashSet<>();
+        Set<String> ids = new HashSet<>(), names = new HashSet<>(), libraryIds = new HashSet<>();
+        if (plan.libraries == null || plan.libraries.size() > catalog.size()) throw new IOException("Invalid dependency proof catalogue");
         for (File file : plan.files) {
             if (file == null || !ids.add(file.id) || !Updater.hash(file.sha256) || file.size <= 0 || file.size > LIMIT || !names.add(file.target.toLowerCase(Locale.ROOT))) throw new IOException("Invalid or duplicate official artifact");
             Updater.fileName(file.target);
             if (folkways(file.id)) {
                 if (!plan.modules.contains(file.id.substring(9))) throw new IOException("Unexpected selected module"); Asset asset = assets.get(file.id.substring(9));
                 if (!asset.name.equals(file.name) || !asset.name.equals("folkways-" + file.id.substring(9) + "-neoforge-1.21.1-" + file.version + ".jar") || !asset.browser_download_url.equals(file.url) || asset.size != file.size || !digest(asset).equals(file.sha256)) throw new IOException("Cached artifact is not the official release asset");
-            } else if (file.id.equals("ldlib2")) {
-                validateLibrary(plan.library); if (!LD_URL.equals(file.url) || file.size != LD_SIZE || !"2.2.37".equals(file.version)) throw new IOException("Unapproved library artifact");
-            } else throw new IOException("Unknown automatic dependency");
+            } else {
+                ApprovedDependencies.Pin pin = catalog.get(file.id); if (pin == null) throw new IOException("Unknown automatic dependency");
+                pin.validate(libraryProof(plan, file.id)); libraryIds.add(file.id);
+                if (!pin.url().equals(file.url) || !pin.name().equals(file.name) || file.size != pin.size() || !pin.mods().get(file.id).equals(file.version)) throw new IOException("Unapproved dependency artifact");
+            }
         }
+        if (!libraryIds.containsAll(plan.libraries.keySet()) || plan.library != null && !libraryIds.contains("ldlib2")) throw new IOException("Unused or conflicting dependency proof");
         for (String module : plan.modules) if (!ids.contains("folkways_" + module)) throw new IOException("Incomplete module set");
+    }
+    private static Config configFor(Plan plan) { Config config = new Config(); config.repository = plan.repository; config.channel = plan.channel; config.modules = plan.modules; return config; }
+    private static Modrinth libraryProof(Plan plan, String id) throws IOException {
+        Modrinth proof = plan.libraries.get(id);
+        if (id.equals("ldlib2") && plan.library != null) {
+            if (proof != null && !Updater.JSON.toJson(proof).equals(Updater.JSON.toJson(plan.library))) throw new IOException("Conflicting legacy and current LDLib2 proofs");
+            if (proof == null) proof = plan.library;
+        }
+        return proof;
     }
     private static boolean sameScope(Plan plan, Config config) { return plan != null && config.manifestUrl.isBlank() && plan.repository.equals(config.repository) && plan.minecraft.equals(config.minecraft) && plan.channel.equals(config.channel) && plan.modules.equals(config.modules); }
     private static String base(Config config) { return "https://api.github.com/repos/" + config.repository; }
@@ -374,12 +475,6 @@ final class GitHubFolkways {
             .sorted(Comparator.comparing(a -> a.name)).map(a -> a.id + ":" + a.name + ":" + a.size + ":" + a.digest).toList())));
     }
     private static String digest(Asset asset) throws IOException { if (asset.digest == null || !asset.digest.matches("sha256:[0-9a-f]{64}")) throw new IOException("Official GitHub asset SHA-256 is missing"); return asset.digest.substring(7); }
-    private static void validateLibrary(Modrinth library) throws IOException {
-        if (library == null || !"B1CBVXHX".equals(library.project_id) || !"bpcbGDy4".equals(library.id) || library.game_versions == null || !library.game_versions.contains("1.21.1")
-            || library.loaders == null || !library.loaders.contains("neoforge") || library.files == null) throw new IOException("Official LDLib2 version metadata mismatch");
-        List<ModrinthFile> matching = library.files.stream().filter(f -> f != null && f.primary).toList();
-        if (matching.size() != 1 || !LD_URL.equals(matching.getFirst().url) || matching.getFirst().size != LD_SIZE || matching.getFirst().hashes == null || !LD_HASH.equals(matching.getFirst().hashes.get("sha512"))) throw new IOException("Official LDLib2 file metadata differs from the audited dependency");
-    }
     static void verifyHash(byte[] bytes, String algorithm, String hash, long size) throws Exception {
         if (bytes.length != size || !HexFormat.of().formatHex(MessageDigest.getInstance(algorithm).digest(bytes)).equals(hash)) throw new IOException("Official download hash/size mismatch; current files were retained");
     }
@@ -394,14 +489,14 @@ final class GitHubFolkways {
     static final class State { Map<String,Owned> owned = new TreeMap<>(); Map<String,Long> highWater = new TreeMap<>(); Map<String,String> accepted = new TreeMap<>(); String scope, pending; }
     static final class File { String id, name, target, url, sha256, version; long size; }
     static final class External { String id, file, version, sha256; long size; }
-    static final class Plan { int schema; String repository, minecraft, channel, commit, loaderVersion, fingerprint; long sequence; List<String> modules; Release release; SelfUpdater.Run run; Modrinth library; List<File> files = new ArrayList<>(); List<External> external = new ArrayList<>(); }
+    static final class Plan { int schema; String repository, minecraft, channel, commit, loaderVersion, fingerprint; long sequence; List<String> modules; Release release; SelfUpdater.Run run; Modrinth library; Map<String,Modrinth> libraries = new TreeMap<>(); List<File> files = new ArrayList<>(); List<External> external = new ArrayList<>(); }
     static final class Journal { State before, after; }
-    static final class Present { String file, version, sha256; long size; }
+    static final class Present { String file, version, sha256; long size; boolean nested, fromFolkways; ModMetadata metadata; }
     static final class Release { long id; String url, tag_name, target_commitish; boolean draft, prerelease; List<Asset> assets; }
     static final class Asset { long id, size; String name, browser_download_url, digest, state; }
     static final class Commit { String sha; }
     static final class Runs { List<SelfUpdater.Run> workflow_runs; }
     static final class Modrinth { String id, project_id; List<String> game_versions, loaders; List<ModrinthFile> files; }
-    static final class ModrinthFile { String url; long size; boolean primary; Map<String,String> hashes; }
+    static final class ModrinthFile { String url, filename; long size; boolean primary; Map<String,String> hashes; }
     static final class DifferentSelection extends IOException { DifferentSelection() { super("Official plan belongs to another source/channel/selection"); } }
 }

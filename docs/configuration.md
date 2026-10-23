@@ -49,6 +49,8 @@
 | `pollSeconds` | 轮询间隔 60–86400 秒，默认 900 |
 | `restartLimit` / `restartCooldownSeconds` | 受监督专服重启的次数与间隔；不表示任意客户端已有重启适配 |
 
+Windows 上若直接建连失败，会只读查询已启用的静态系统 HTTP 代理并额外尝试一次；没有新增代理配置字段，不修改系统或全局 JVM 属性。PAC、SOCKS 和代理认证不在此回退范围；官方 HTTPS、来源白名单、大小和摘要校验保持生效。
+
 来源、两个开关和检查按钮的设置保存后生效；自动轮询间隔最迟在下一次检查后更新，立即检查无需重启。Folkways 操作前重新检查本地开发值，下载期间打开它也会阻止后续 Folkways/依赖安装；自身更新继续遵守独立开关。
 
 ## 本地开发与自身更新
@@ -80,7 +82,7 @@
 
 `manifestUrl=""`、`publicKeys={}` 是默认官方 GitHub 来源。空实例可首次安装 Core、Vanilla 和缺失的 LDLib2；已受管文件可后续更新。Folkways 的资产摘要、固定提交、对应成功发布 CI 和选中模块集合必须一致；这里不把上游包称为本项目签名或构建。
 
-已有手动或本地编译 Folkways 包不会被静默接管，也不通过配置开关重置其归属。LDLib2 以官方 Modrinth 项目/版本和文件摘要为依据；已有前置不应被未知下载覆盖。可选扩展要求已安装兼容的 Create、Modular Golems 或 Kaleidoscope Cookery。
+已有手动或本地编译 Folkways 包不会被静默接管，也不通过配置开关重置其归属。LDLib2 以官方 Modrinth 项目/版本和文件摘要为依据；已有前置不应被未知下载覆盖。三个可选扩展无需预装前置就能勾选；检查时会按实际 JAR 声明和固定官方目录补齐缺失的 Create、Modular Golems、Kaleidoscope Cookery 及间接依赖。兼容前置只读复用，冲突保留原文件并提示；取消扩展不自动卸载已安装前置。详见 [前置安装规则](dependencies.md)。
 
 当前两个源只有 nightly 实际发行；其他渠道若无符合条件的包，保留当前文件。Folkways 检查暂时不可用时不吞掉 updater 自身的检查结果。
 

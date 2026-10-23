@@ -6,4 +6,6 @@
 
 2026-10-24 起的当前契约见 [配置指南](../configuration.md)：本地开发只由 `config.localDevelopment` 控制，仅暂停 Folkways/依赖；自身更新独立。旧记录仍能支持其中注明的资产摘要、字节传输、文件事务或生命周期事实，但不能替代新开关契约的验收。
 
+`2026-10-23-client-configuration.json` 和 `2026-10-24-independent-client-configuration.json` 中“缺前置时按钮禁用”是旧界面行为；可选前置自动安装改动后的当前界面允许直接选择，不能用这些旧记录验证新选择规则。
+
 每次新记录应标明实际源码/发行身份、测试方式、平台、是否经过正式网络路径、是否启动 Minecraft，以及未覆盖的范围。最新汇总见 [验证说明](../verification.md)。
