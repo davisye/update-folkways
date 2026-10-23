@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -65,8 +66,10 @@ def read_json(path):
 
 
 def probe(java, helper, game, companion, environment):
-    command = [java, '-cp', str(helper), ENTRYPOINT, '--probe', str(game), str(companion)]
-    process = subprocess.Popen(command, cwd=game, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    encoded_game = base64.urlsafe_b64encode(str(game).encode('utf-8')).decode().rstrip('=')
+    encoded_companion = base64.urlsafe_b64encode(str(companion).encode('utf-8')).decode().rstrip('=')
+    command = [java, '-cp', helper.name, ENTRYPOINT, '--probe-b64', encoded_game, encoded_companion]
+    process = subprocess.Popen(command, cwd=helper.parent, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, encoding='utf-8', errors='replace')
     try:
         output, errors = process.communicate(timeout=60)

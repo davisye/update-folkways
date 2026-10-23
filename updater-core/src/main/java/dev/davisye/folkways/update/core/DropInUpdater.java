@@ -216,9 +216,11 @@ public final class DropInUpdater {
             Updater.atomic(runtime.resolve("intent.json"), json(intent));
             List<String> command = new ArrayList<>(List.of(javaExecutable().toString()));
             if (Boolean.getBoolean("folkways.localDevelopment")) command.add("-Dfolkways.localDevelopment=true");
-            command.addAll(List.of("-cp", runtime.resolve("helper.jar").toString(), Helper.class.getName(),
-                "--wait", u.game.toString(), Long.toString(intent.parentPid), intent.parentStart, runtime.toString(), intent.token));
-            ProcessBuilder builder = new ProcessBuilder(command);
+            // Java 21's Windows launcher converts main arguments through the active ANSI code page.
+            // Keep the internal command ASCII and let the JVM resolve the relative class path from its Unicode cwd.
+            command.addAll(List.of("-cp", "helper.jar", Helper.class.getName(),
+                "--wait-b64", encodePath(u.game), Long.toString(intent.parentPid), intent.parentStart, encodePath(runtime), intent.token));
+            ProcessBuilder builder = new ProcessBuilder(command).directory(runtime.toFile());
             builder.redirectInput(ProcessBuilder.Redirect.PIPE); builder.redirectOutput(runtime.resolve("helper.log").toFile()); builder.redirectErrorStream(true);
             Process process = builder.start();
             Optional<Instant> start = process.info().startInstant();
@@ -433,6 +435,16 @@ public final class DropInUpdater {
         Updater.atomic(u.home.resolve("last-install.json"), json(mark));
     }
     private static Instant currentStart() throws IOException { return ProcessHandle.current().info().startInstant().orElseThrow(() -> new IOException("Cannot identify this JVM start time")); }
+    private static String encodePath(Path path) { return Base64.getUrlEncoder().withoutPadding().encodeToString(path.toString().getBytes(StandardCharsets.UTF_8)); }
+    private static Path decodePath(String encoded) throws IOException {
+        try {
+            if (encoded.isEmpty() || encoded.length() > 131072 || !encoded.matches("[A-Za-z0-9_-]+")) throw new IOException("Invalid encoded helper path");
+            byte[] bytes = Base64.getUrlDecoder().decode(encoded);
+            String decoded = StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+            return Path.of(decoded);
+        } catch (IllegalArgumentException | java.nio.charset.CharacterCodingException e) { throw new IOException("Invalid UTF-8 helper path", e); }
+    }
     private static Path javaExecutable() { Path path = Path.of(System.getProperty("java.home"), "bin", "java.exe"); return Files.exists(path) ? path : path.resolveSibling("java"); }
     private static byte[] json(Object value) { return Updater.JSON.toJson(value).getBytes(StandardCharsets.UTF_8); }
     private static <T> T decode(byte[] bytes, Class<T> type) throws IOException {
@@ -452,17 +464,18 @@ public final class DropInUpdater {
     /** Hidden fat-JAR entrypoint; no remote lookup is permitted from this process. */
     public static final class Helper {
         public static void main(String[] args) throws Exception {
-            if (args.length == 3 && args[0].equals("--probe")) {
-                DropInUpdater updater = initialize(Path.of(args[1]), Path.of(args[2]));
+            if (args.length == 3 && (args[0].equals("--probe") || args[0].equals("--probe-b64"))) {
+                boolean encoded = args[0].equals("--probe-b64");
+                DropInUpdater updater = initialize(encoded ? decodePath(args[1]) : Path.of(args[1]), encoded ? decodePath(args[2]) : Path.of(args[2]));
                 updater.startHelper(); HelperOwner owner = read(updater.u, updater.u.home.resolve("dropin-helper.json"), HelperOwner.class);
                 Map<String,Object> result = new LinkedHashMap<>(); result.put("helperPid", owner.pid); result.put("helperStart", owner.start); result.put("runtime", owner.runtime);
                 result.put("parentPid", ProcessHandle.current().pid()); result.put("parentStart", currentStart().toString()); result.put("ready", updater.helperAlive());
                 System.out.println(Updater.JSON.toJson(result)); return;
             }
-            if (args.length != 6 || !args[0].equals("--wait")) throw new IOException("Internal helper usage: --wait GAME PARENT_PID PARENT_START RUNTIME TOKEN");
-            DropInUpdater updater = new DropInUpdater(Path.of(args[1]), null); Updater u = updater.u;
+            if (args.length != 6 || !args[0].equals("--wait-b64")) throw new IOException("Internal helper usage: --wait-b64 GAME_B64 PARENT_PID PARENT_START RUNTIME_B64 TOKEN");
+            DropInUpdater updater = new DropInUpdater(decodePath(args[1]), null); Updater u = updater.u;
             long parentPid = Long.parseLong(args[2]); String parentStart = Instant.parse(args[3]).toString();
-            Path runtime = u.existingInput(Path.of(args[4]));
+            Path runtime = u.existingInput(decodePath(args[4]));
             if (!Objects.equals(runtime.getParent(), u.home.resolve("dropin-runtime")) || !runtime.getFileName().toString().matches("helper-[A-Za-z0-9-]+")) throw new IOException("Invalid helper runtime path");
             Path executing = Path.of(Helper.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
             if (!executing.equals(runtime.resolve("helper.jar"))) throw new IOException("The exit helper must run from its unique runtime copy");

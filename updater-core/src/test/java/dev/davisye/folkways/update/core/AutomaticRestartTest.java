@@ -24,7 +24,7 @@ class AutomaticRestartTest {
         Config config = Config.load(game); config.commandsEnabled = true; config.restartLimit = 1; config.restartCooldownSeconds = 1;
         Files.writeString(game.resolve(".folkways-updater/config.json"), Updater.JSON.toJson(config));
         List<String> args = List.of(mode.equals("path") ? "java" : javaExecutable(), "-cp", classpath(), Child.class.getName(), game.toString(), mode,
-                "space arg", "中文路径", "quote\"arg", "backslash\\", "", "x".repeat(10000));
+                "space arg", "中文路径", "unicode-\u1c50", "quote\"arg", "backslash\\", "", "x".repeat(10000));
         Process p = AutomaticRestart.startJava(new ProcessBuilder(args).directory(game.toFile()).redirectErrorStream(true)
                 .redirectOutput(game.resolve("parent.log").toFile()));
         try {
@@ -61,7 +61,12 @@ class AutomaticRestartTest {
         public static void main(String[] args) throws Exception {
             Path game = Path.of(args[0]);
             if (!Files.isSameFile(Path.of("").toAbsolutePath(), game)) throw new AssertionError("cwd changed");
-            List<String> expectedArgs = List.of("space arg", "中文路径", "quote\"arg", "backslash\\", "", "x".repeat(10000));
+            List<String> rawArgs = List.of("space arg", "中文路径", "unicode-\u1c50", "quote\"arg", "backslash\\", "", "x".repeat(10000));
+            // Windows java.exe decodes main arguments using the host native code page. US hosts cannot
+            // represent Chinese there; compare the original Java-visible baseline as well as the raw OS vector.
+            var nativeCharset = java.nio.charset.Charset.forName(System.getProperty("native.encoding", "UTF-8"));
+            List<String> expectedArgs = System.getProperty("os.name").startsWith("Windows")
+                    ? rawArgs.stream().map(arg -> new String(arg.getBytes(nativeCharset), nativeCharset)).toList() : rawArgs;
             List<String> actualArgs = Arrays.asList(args).subList(2, args.length);
             if (!expectedArgs.equals(actualArgs)) {
                 StringBuilder diagnostic = new StringBuilder("Synthetic argument vector changed: expected count=").append(expectedArgs.size()).append(", actual count=").append(actualArgs.size());
@@ -71,6 +76,9 @@ class AutomaticRestartTest {
                             .append(Arrays.toString(actualArgs.get(i).codePoints().limit(24).toArray()));
                 throw new AssertionError(diagnostic);
             }
+            List<String> captured = AutomaticRestart.captureCommand();
+            if (!captured.subList(captured.size() - rawArgs.size(), captured.size()).equals(rawArgs))
+                throw new AssertionError("Raw OS argument vector changed, including Unicode");
             Path countFile = game.resolve("launch-count");
             int count = Files.exists(countFile) ? Integer.parseInt(Files.readString(countFile)) + 1 : 1;
             Files.writeString(countFile, Integer.toString(count));

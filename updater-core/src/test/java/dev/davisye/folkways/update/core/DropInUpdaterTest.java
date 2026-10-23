@@ -206,8 +206,9 @@ class DropInUpdaterTest {
         Files.writeString(marker, "{}"); assertThrows(IOException.class, () -> DropInUpdater.guardGame(game));
     }
     @Test void actualIndependentHelperWaitsForItsExactParentThenWritesSuccessAndIsPruned() throws Exception {
+        Path asciiProbeRoot = game; game = Files.createDirectory(game.resolve("中文游戏 目录"));
         Files.createDirectories(game.resolve("mods")); SelfUpdaterTest factory = new SelfUpdaterTest(); byte[] jar = companion(factory.metadata(1)); Files.write(mod(), jar);
-        Path bootstrap = game.resolve("probe-bootstrap.jar"); Files.write(bootstrap, helper(factory.metadata(1)));
+        Path bootstrap = asciiProbeRoot.resolve("probe-bootstrap.jar"); Files.write(bootstrap, helper(factory.metadata(1)));
         Map<?,?> first = probe(bootstrap); Path firstRuntime = game.resolve((String)first.get("runtime"));
         assertTrue(Config.load(game).selfUpdateEnabled); assertFalse(Config.load(game).localDevelopment);
         assertArrayEquals(jar, Files.readAllBytes(mod()));
@@ -235,7 +236,7 @@ class DropInUpdaterTest {
         String java = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
         List<String> command = new ArrayList<>(List.of(java)); if (property) command.add("-Dfolkways.localDevelopment=true");
         Path testClasses = Path.of(ProbeParent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-        command.addAll(List.of("-cp", bootstrap + File.pathSeparator + testClasses, ProbeParent.class.getName(), game.toString(), mod().toString()));
+        command.addAll(List.of("-cp", bootstrap + File.pathSeparator + testClasses, ProbeParent.class.getName(), encodePath(game), encodePath(mod())));
         Process parent = new ProcessBuilder(command).redirectErrorStream(true).start();
         BufferedReader output = parent.inputReader(StandardCharsets.UTF_8);
         String text = output.readLine(); assertNotNull(text);
@@ -258,7 +259,7 @@ class DropInUpdaterTest {
     }
     public static final class ProbeParent {
         public static void main(String[] args) throws Exception {
-            Path game = Path.of(args[0]); DropInUpdater updater = DropInUpdater.initialize(game, Path.of(args[1])); updater.startHelper();
+            Path game = decodePath(args[0]); DropInUpdater updater = DropInUpdater.initialize(game, decodePath(args[1])); updater.startHelper();
             DropInUpdater.HelperOwner owner = Updater.JSON.fromJson(Files.readString(game.resolve(".folkways-updater/dropin-helper.json")), DropInUpdater.HelperOwner.class);
             Map<String,Object> value = new LinkedHashMap<>(); value.put("helperPid", owner.pid); value.put("helperStart", owner.start);
             value.put("parentPid", ProcessHandle.current().pid()); value.put("runtime", owner.runtime); value.put("ready", updater.helperAlive());
@@ -266,6 +267,8 @@ class DropInUpdaterTest {
             if (System.in.read() != 1) throw new IOException("Test parent was not released");
         }
     }
+    static String encodePath(Path path) { return Base64.getUrlEncoder().withoutPadding().encodeToString(path.toString().getBytes(StandardCharsets.UTF_8)); }
+    static Path decodePath(String value) { return Path.of(new String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8)); }
     static void stopHelper(DropInUpdater updater) throws Exception {
         Path game = updaterGame(updater); DropInUpdater.HelperOwner owner = Updater.JSON.fromJson(Files.readString(game.resolve(".folkways-updater/dropin-helper.json")), DropInUpdater.HelperOwner.class);
         ProcessHandle handle = ProcessHandle.of(owner.pid).orElseThrow(); assertEquals(owner.start, handle.info().startInstant().orElseThrow().toString()); handle.destroy(); handle.onExit().get(10, TimeUnit.SECONDS);
