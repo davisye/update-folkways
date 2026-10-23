@@ -18,6 +18,10 @@ public final class Updater {
     static final Set<String> MODULES = Set.of("core", "vanilla", "create", "modulargolems", "cookery");
     final Path game, home, mods;
     private final Fetcher injected;
+    interface InstallGate { void check() throws Exception; void committed() throws Exception; }
+    InstallGate installGate;
+    private void installCheck() throws Exception { if (installGate != null) installGate.check(); }
+    private void installCommitted() throws Exception { if (installGate != null) installGate.committed(); }
 
     public Updater(Path gameDir) throws IOException { this(gameDir, null); }
     Updater(Path gameDir, Fetcher injected) throws IOException {
@@ -122,7 +126,7 @@ public final class Updater {
             return "Local development: replacement disabled";
         }
         return locked(() -> {
-            requireManaged(c); recover();
+            installCheck(); requireManaged(c); recover();
             restorePendingSwap(c);
             Path pending = home.resolve("pending");
             if (!Files.exists(pending.resolve("manifest.json"))) return "No pending update";
@@ -154,18 +158,18 @@ public final class Updater {
                 Artifact a = artifact(m, module);
                 journal.after.put(module, new Owned(before.installed.get(module).file, a.sha256, a.size));
             }
-            requireManaged(c); validateOwned(before, c);
+            installCheck(); requireManaged(c); validateOwned(before, c);
             atomic(home.resolve("journal.json"), JSON.toJson(journal).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             try {
                 for (String module : c.modules) {
-                    requireManaged(c);
+                    installCheck(); requireManaged(c);
                     Artifact a = artifact(m, module);
                     atomic(mods.resolve(before.installed.get(module).file), readBounded(pending.resolve(a.file), MAX_BUNDLE));
                 }
                 State after = new State(); after.installed.putAll(journal.after);
                 after.highWater.putAll(before.highWater); after.accepted.putAll(before.accepted);
                 after.highWater.put(c.scope(), m.sequence); after.accepted.put(c.scope(), sha(envelope)); after.buildId = m.buildId; after.installedScope = c.scope();
-                saveState(after); Files.delete(home.resolve("journal.json")); clear(pending);
+                installCheck(); saveState(after); installCommitted(); Files.delete(home.resolve("journal.json")); clear(pending);
                 return "Installed " + m.buildId;
             } catch (Exception e) {
                 // A changed development flag blocks further replacement, including automatic rollback.
@@ -178,6 +182,7 @@ public final class Updater {
     void recover() throws Exception {
         Path p = home.resolve("journal.json");
         if (!Files.exists(p)) return;
+        installCheck();
         if (Config.load(game).isLocalDevelopment(game)) throw new IOException("Recovery disabled in local development");
         Journal j = JSON.fromJson(new String(readBounded(p, 1024 * 1024), java.nio.charset.StandardCharsets.UTF_8), Journal.class);
         if (j == null || j.before == null || j.before.installed.isEmpty() || !j.after.keySet().equals(j.before.installed.keySet())) throw new IOException("Invalid recovery journal");
@@ -192,10 +197,11 @@ public final class Updater {
             if (!h.equals(old.sha256) && !h.equals(next.sha256)) throw new IOException("Local edit blocks recovery: " + old.file);
         }
         for (var e : j.before.installed.entrySet()) {
+            installCheck();
             if (Config.load(game).isLocalDevelopment(game)) throw new IOException("Local-development protection enabled during recovery");
             atomic(mods.resolve(e.getValue().file), readBounded(home.resolve("backup/" + e.getKey() + ".jar"), MAX_BUNDLE));
         }
-        saveState(j.before); Files.delete(p);
+        installCheck(); saveState(j.before); installCommitted(); Files.delete(p);
     }
 
     private void requireManaged(Config expected) throws IOException {

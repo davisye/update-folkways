@@ -1,99 +1,68 @@
-# 安装与更新器自更新
+# 安装与退出后更新
 
-使用独立测试实例，先关闭游戏并备份世界/配置。需要 Java 21。Windows 使用 PowerShell；Linux seed 需要 Bash 和 `flock`。seed v1 只支持前台 `java` / `java.exe` 命令，不接受分离进程的 GUI 启动器、`javaw` 或 shell 包装器。
+新安装只需一个 NeoForge Mod JAR。需要 Java 21 与 NeoForge 1.21.1；先关闭实例，备份重要存档和配置。
 
-本项目不安装 Minecraft、NeoForge、Folkways 或扩展所需的第三方前置 Mod。
+## 安装
 
-## 首次安装
+1. 从本仓库 [Releases](https://github.com/davisye/update-folkways/releases) 下载 `folkways-updater-neoforge-1.21.1-<version>.jar`。
+2. 放入实例 `mods/`，确认没有另一份 updater JAR。
+3. 用原来的启动器照常启动。无需单独下载 standalone Bootstrap、seed 脚本、元数据或公钥。
 
-1. 从本仓库同一次 [Release](https://github.com/davisye/update-folkways/releases) 下载 Bootstrap、伴随 Mod、对应系统 seed、checksums 和元数据，核对 `checksums.sha256`。
-2. 将 `folkways-updater-neoforge-1.21.1-<version>.jar` 放进实例 `mods/`；避免同时保留两份 updater 伴随 Mod。
-3. 把 `launch.ps1` 或 `launch.sh` 放在你管理启动配置的位置，保留下载的 Bootstrap 作为首次安装来源。
-4. 使用下面的 seed 命令。它会复制 Bootstrap 到 `<instance>/.folkways-updater/bin/folkways-bootstrap.jar`，并显式记录这两个现有 updater JAR 的归属。
+用于退出后安装的独立 helper 已内嵌在 Mod 中，自动释放到 `.folkways-updater/`。不要手工把 helper 放进 mods。
 
-Bootstrap 和伴随 Mod 必须来自同一版本；本地源码构建会被识别为开发构建并受到自身更新保护。首次安装是手动信任步骤，seed 不会自行挑选陌生 JAR 或接受新下载站作为信任根。
+国内下载可在官方 Release 确认完整 JAR 名称后，使用 `https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<完整JAR文件名>`。首次下载属于人工信任步骤；运行时不能用镜像自己的摘要代替官方 API 与 CI 身份验证。
 
-国内首次下载也可使用 nightly 的同附件镜像：[launch.ps1](https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/launch.ps1)、[launch.sh](https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/launch.sh)、[update-metadata.json](https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/update-metadata.json)。两个 JAR 的完整文件名应从同次官方 Release/元数据确认，再套用 `https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<附件名>`。首次仍由用户确认可信来源；运行时以官方 API 摘要及 CI 身份作校验，镜像仅传输字节。
+本项目不代装 Minecraft、NeoForge、Folkways 或扩展的第三方前置 Mod。
 
-### Windows 专服示例
+## 第一次运行会发生什么
 
-示例目录是相对当前终端的 `instance/` 和 `downloads/`。将 `<version>` 替换成下载版本，并按实际 NeoForge 安装调整参数文件路径：
+第一次加载你手工安装的现有版本，登记它的文件归属，并检查更新。没有现有配置的官方发行版默认 `localDevelopment=false`；已存在的配置保持原值。本地源码构建、NeoForge 开发环境及显式开发保护继续禁用自动更新。
 
-```powershell
-$gameJvm = @(
-  'java',
-  '@user_jvm_args.txt',
-  '@libraries/net/neoforged/neoforge/21.1.233/win_args.txt',
-  'nogui'
-)
-.\launch.ps1 -GameDirectory .\instance `
-  -BootstrapJar .\downloads\folkways-bootstrap-<version>-standalone.jar `
-  -CompanionJar .\instance\mods\folkways-updater-neoforge-1.21.1-<version>.jar `
-  -Dedicated -GameCommand $gameJvm
-```
+下载通过验证后，游戏提示更新已准备。后台 helper 等待**整个游戏 JVM**退出，而不是只等待退出世界或集成服务器停止。你可以正常继续游戏，更新不会原地覆盖已加载文件。
 
-`-Java` 可指定用于 Bootstrap/helper 的 Java 21 可执行文件；`$gameJvm[0]` 是游戏 JVM，两者需分别正确配置。脚本参数传递为数组，不要拼成一个 shell 命令字符串。
+JVM 退出后，helper 重查其他游戏进程、开发保护、文件归属、待安装内容与事务状态，再安装。下一次照常启动即可加载新版本。
 
-### Linux 专服示例
+## 不必为了自身更新配置 Folkways 签名
 
-```bash
-bash ./launch.sh \
-  --game-dir ./instance \
-  --bootstrap-jar ./downloads/folkways-bootstrap-<version>-standalone.jar \
-  --companion-jar ./instance/mods/folkways-updater-neoforge-1.21.1-<version>.jar \
-  --dedicated -- java @user_jvm_args.txt \
-  @libraries/net/neoforged/neoforge/21.1.233/unix_args.txt nogui
-```
+updater 自身固定使用本仓库的官方发布与成功 CI 构建。`selfUpdateEnabled=true` 时可检查自身，`selfUpdateChannel` 可选择 `nightly` 或 `release`。
 
-`--java` 可指定 helper 的 Java；默认使用 `JAVA_HOME/bin/java`，未设置时使用 PATH 中的 `java`。游戏启动参数中的相对路径由实例目录解析。
+Folkways 的 `manifestUrl` 和 `publicKeys` 可以继续留空。这不影响 updater 自身检查，但表示 Folkways 自动更新未配置。公共 Folkways 自动签名发布仍延期；不要为了启用自身更新填写陌生密钥或未经验证的清单地址。
 
-首次安装成功后，同一 seed 启动命令可省略 `BootstrapJar` / `CompanionJar`（Linux 为对应长选项）；它们不是每次重置归属的开关。seed 和两个 JAR 有独立用途，不要将 Bootstrap 放到 mods 目录。
+## 退出、重开与失败
 
-## 初始配置保持开发保护
+- **刚退出又立即重开：** 若与 helper 安装重叠，进程/事务门禁可能中止这次启动。按提示等待安装完成后再开，避免混代文件进入世界。
+- **下载或官方 API 暂不可用：** 保留现有 updater。已加载版本可继续运行，后续再检查。
+- **系统关机或 helper 被终止：** 可能保留待更新或恢复状态；不能保证本次已安装，按下次提示处理。
+- **开发保护开启或受管 JAR 被手工改动：** 游戏仍可加载手工安装的完整 updater，但自动替换被保护，旧归属不静默重置。未完成事务或启动冲突仍会拦截加载。
 
-首次创建的 `.folkways-updater/config.json` 中 `localDevelopment=true`。此时 seed 仍可启动实例，但不会自动检查、预下载或替换 Folkways / updater。
+这个流程不控制启动器的扫描前时机，也不保证每次启动都已经是最新。中止启动的门禁是冲突保护，不应通过强删文件绕过。
 
-只启用**更新器自身更新**时，可在 seed 首次接管后设置 `localDevelopment=false`、`selfUpdateEnabled=true`，保留 Folkways 的 `manifestUrl=""` 和 `publicKeys={}`。这会启用官方 updater 通道，Folkways 自动更新仍未配置，也不需要先执行 Folkways `adopt`。
+## 本地开发
 
-以后要同时启用 **Folkways 更新**，再按 [配置指南](configuration.md) 配置其可信清单、公钥、源和模块，并接管已安装 Folkways 文件。Folkways 首次接管与 updater 首次接管是两个操作：
+保留/设置 `localDevelopment=true`，或创建 `.folkways-updater/LOCAL_DEVELOPMENT`。环境变量 `FOLKWAYS_LOCAL_DEVELOPMENT=true` 与 JVM 参数 `-Dfolkways.localDevelopment=true` 也可启用保护。
 
-```powershell
-java -jar .\instance\.folkways-updater\bin\folkways-bootstrap.jar status --game-dir .\instance
-java -jar .\instance\.folkways-updater\bin\folkways-bootstrap.jar adopt --game-dir .\instance
-```
+本地构建身份和 NeoForge 开发环境继续受保护，即使从前的配置是 managed 模式。修改配置后，helper 在安装前仍需重新检查保护。字段说明见 [配置指南](configuration.md)。
 
-`adopt` 记录 Folkways 所选模块；seed 的 `CompanionJar` / `self-adopt` 记录 updater 自身两 JAR，不会替你接管 Folkways。
+IDE、JVM `-D` 与环境变量保护会持久留下 `LOCAL_DEVELOPMENT` 标记，避免父进程退出后 helper 丢失开发设置。恢复 managed 需要关闭对应 flag、配置为 `false`，并在实例关闭后主动移除该标记；不能只改一个开关。
 
-## 自更新如何工作
+## 专服停止与重启
 
-配置 `selfUpdateEnabled=true`，`selfUpdateChannel` 选择本仓库的 `nightly` 或 `release`。它独立于 Folkways 的五渠道；所有本地开发保护仍优先。
+启用 `commandsEnabled=true` 后，OP 4 可用 `/shutdown [seconds]` 或 `/restart [seconds]`，默认 10 秒，范围 0–300 秒；发出停止请求前可用对应的 `cancel` 取消。
 
-1. 直连固定仓库的官方 GitHub HTTPS API，读取公开 release、资产 SHA256/大小与 Actions run；不带凭据，不使用镜像授权信任，也不跟随 API 重定向。
-2. 下载并校验 `update-metadata.json`，绑定版本、完整提交、两个 JAR、递增 sequence 以及官方 `ci.yml` 的成功 push 构建。清单文件和 JAR 可以经允许镜像传输，但必须匹配官方 API 提供的摘要。
-3. 游戏运行期间只预下载到 `self-pending/`。人工修改的受管文件、开发构建、旧序号或错构建均阻止替换。
-4. 下次 seed 启动时，从固定 bin 复制独立 runner，先运行 `self-prepare`。helper 在 session/child/whole-JVM lease 门禁下恢复或安装两个 updater JAR，然后退出。
-5. seed 等 helper 退出，再从新 bin 复制新的 runner，启动 Bootstrap 和游戏 JVM。避免覆盖正在运行的 Bootstrap 或游戏内 companion。
+drop-in helper 能精确恢复原 Java 参数和工作目录时，专服重启走正常保存、父 JVM 退出、helper 启动新整 JVM。helper、命令参数或重启预算不可用时，`/restart` 在停服前拒绝并保留运行；默认一次会话最多 5 次、冷却 10 秒。已有同名命令不会被覆盖。
 
-可信 API 不可达或官方构建尚未完成时，保留现有 updater 继续启动；公开 PR 产物不能触发安装。CI 发布 job 尚在运行时，run 还不是 `completed/success`，短暂拒绝是预期行为。
-
-自更新替换的是已接管的原文件路径，伴随 Mod 的旧文件名可以保留、内部版本会更新。不要因为文件名还带旧版本就额外放入第二份 JAR。
-
-## 固定 seed 与旧入口
-
-seed 协议 v1 首次手工安装，脚本本身不自动替换。新 seed 协议需要用户审阅并手动迁移。
-
-旧式直接调用 `java -jar <bootstrap.jar> launch ...` 仍可监督游戏和处理 Folkways 更新；自身更新仅检查/预下载并提示改用 seed。它不会覆盖当前正在使用的 Bootstrap。没有显式 updater 归属时，先完成 seed 首次安装。
-
-诊断操作包括 `status`、`self-check` 和由 seed 调用的 `self-prepare`。不要通过删除 `self-state.json`、恢复日志或进程门禁来强行重设归属；先关闭所有相关进程并检查错误及备份。
-
-## 客户端接入边界
-
-客户端需要启动器提供有效的账号、会话、classpath 和游戏参数，再把真实前台 Java 命令交给 seed。不要将账号会话写入公开仓库或日志。
-
-本项目尚未提供通用启动器适配，也不支持完整客户端 `/restart`。启动一个 GUI 启动器后立即退出的包装脚本无法让 supervisor 可靠判断游戏是否结束，不属于受支持接入方式。
+该流程已在单 updater 的隔离 NeoForge 专服实测，边界见 [验证说明](verification.md)。客户端完整重启暂不支持；重启内置服务器不能让客户端重新加载 Mod。
 
 ## 恢复与缓存
 
-Folkways 与 updater 有独立 pending、状态和事务日志。两 JAR 自更新采用逐文件原子替换与恢复备份，仍不是跨文件原子事务。发生未完成事务、仍有游戏 JVM，或路径/归属异常时会停止安装或启动门禁，不能用强删文件代替确认。
+独立 helper 使用进程身份、状态、恢复日志和有限备份管理安装；检测到存活 JVM、未完成事务或不匹配文件时停止。逐文件原子替换不等于多个 JAR 的文件系统原子事务，也不保证断电耐久性。
 
-runner 使用唯一目录和 PID/启动时间 lease。只清理确认已退出的运行副本；启动阶段未知的目录会保留供人工检查，不能承诺任何异常下都零残留。正常下载和事务成功后清理临时候选与旧恢复集合，缓存不会按每次轮询无限累积。
+不要手工删除进程 lease、事务日志、归属记录或待更新目录来强行继续。先关闭相关实例并检查错误与备份。正常成功后清理待安装和临时运行文件；启动阶段未知的残留会保留供检查。
+
+## 旧 Bootstrap/seed 方式迁移
+
+早期版本需要手动安装 standalone Bootstrap、`launch.ps1` / `launch.sh` 和伴随 Mod，由外部 supervisor 创建游戏 JVM。旧的 `6.1 → 7.1` 验收属于这种方式，不是单 JAR 模式的证明。
+
+迁移时先关闭原监督进程与游戏，备份配置和存档，移除 mods 中的旧 updater JAR，再放入支持 drop-in 的新版单 JAR，并恢复使用普通启动器入口。保留原 `.folkways-updater/config.json`；已有 `localDevelopment=true` 不会自动关闭。不要把旧 seed 和新 helper 同时作为日常启动流程。
+
+遇到旧事务未完成的提示时先按旧方式完成恢复，不通过删除日志跳过。单 JAR 模式无需用户重新下载和手动管理旧的 bin、seed 或发行元数据。

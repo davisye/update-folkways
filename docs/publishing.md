@@ -4,7 +4,7 @@
 
 | 发布对象 | 信任依据 | 现状 |
 | --- | --- | --- |
-| 更新器 Bootstrap / 伴随 Mod | 本仓库官方 GitHub HTTPS API、资产 SHA256 与成功 CI 身份 | 由 [CI](ci.md) 构建与发布；不使用 Folkways 签名密钥 |
+| 更新器单 JAR（内嵌 helper） | 本仓库官方 GitHub HTTPS API、资产 SHA256 与成功 CI 身份 | 由 [CI](ci.md) 构建与发布；不要求用户下载独立元数据或 Folkways 签名密钥 |
 | Folkways 五组件 | 可信发布者预置的 Ed25519 公钥、精确 payload 签名与每个 JAR 摘要 | 离线工具已实现；公共自动签名通道尚未启用 |
 
 以下主要说明 Folkways 镜像。工具默认使用**逐 JAR 签名链接清单**，沿用真实 GitHub 资产，不需要重新制作 ZIP。清单恰含五个组件，客户端只下载所选模块。`pack` 保留可选 ZIP 兼容模式。

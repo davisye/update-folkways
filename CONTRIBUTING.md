@@ -13,7 +13,7 @@ python -m unittest discover -s tests/publisher -v
 
 Linux 使用 `./gradlew`。首次构建需下载依赖。其他发布测试命令以 [CI](docs/ci.md) 为准，提交前运行与你的改动相关的检查即可。
 
-在独立测试实例开发，保留 `localDevelopment=true`，或创建 `.folkways-updater/LOCAL_DEVELOPMENT`。不要把测试安装指向日常存档或生产发布目录。
+在独立测试实例开发，显式保留 `localDevelopment=true`，或创建 `.folkways-updater/LOCAL_DEVELOPMENT`。源码构建和 NeoForge 开发环境同样受保护；官方发行新实例的 managed 默认值不应被当作本地开发设置。不要把测试安装指向日常存档或生产发布目录。
 
 ## 提交与 Pull Request
 
@@ -24,6 +24,12 @@ main 通过 Pull Request 合并，要求 Windows 与 Ubuntu 的 CI 均通过并�
 一个 PR 尽量解决一个具体问题。描述触发条件、改变后的行为、验证结果及未覆盖的限制。启动、事务、自更新和发布代码应有针对失败或恢复路径的行为测试，避免只复述实现的断言。不要顺带格式化无关代码。
 
 保持既有安全边界：开发模式优先、无静默接管、真实游戏进程退出前不替换、签名/来源/摘要失败时拒绝安装、正式版本不可变、缓存有界。跨平台路径改动须考虑 Windows junction、文件占用及 Linux 行为。
+
+## Drop-in 改动的验证
+
+单 JAR 模式检查与预下载后，helper 等整个 JVM 退出才安装。涉及初始化或事务的改动，应覆盖新官方安装/已有配置/本地构建三种情形，以及父 JVM 退出、新 JVM 较晚构造、helper 每个写入阶段的重叠。冲突时可以拒绝启动，但不能让混代文件进入世界。
+
+旧外部 seed 的进程测试不是 drop-in 已验证的替代品。公开结果必须注明真实 Minecraft/存档是否测试；不要把前台 Java 探针写成完整游戏测试。
 
 ## 问题报告
 

@@ -1,57 +1,55 @@
 # CI 与更新器自身发行
 
-工作流为 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)。它发行更新器自己的两个 JAR，不重新打包 Folkways 模组。
+工作流为 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)。公开 Release 只发行一个可直接放入 Minecraft `mods` 的 NeoForge 1.21.1 Mod JAR。
 
 ## 质量门禁
 
-- 每个 PR 和 main push、`v*` tag push 都在 Ubuntu 24.04 与 Windows 上使用 Java 21、Python 3.12 构建。
-- 两个平台都运行 Gradle 的全部 Java/进程测试及 `tests/publisher` 下的 Python 发布测试。只有两个平台均成功，发布 job 才能开始。
-- `prepare` 后，两个平台都用实际 Release 形状的两个 JAR 与本机 seed 执行首次安装烟测：隔离临时实例、显式 adopt、默认本地开发模式、真实前台 `java -version`。检查安装前后 JAR 摘要不变、归属记录完整、runtime 清空且无 child barrier；不启动 Minecraft、不访问网络、不修改用户实例。Windows 用临时 PowerShell 包装脚本传递真实 `string[]`，Linux 使用 bash 与 flock。
+- 每个 PR、main push 和 `v*` tag push 都在 Ubuntu 24.04 与 Windows 上使用 Java 21、Python 3.12 构建。`Java 21 / ubuntu-24.04`、`Java 21 / windows-latest` 两个检查名称保持稳定。
+- 两个平台都运行 Gradle 的全部 Java/进程测试以及 `tests/publisher` 下的 Python 发布测试。两边均成功后，发布 job 才能开始。
+- `prepare` 校验外层 Mod 和内嵌 helper 的完整构建身份、Java 21 class 版本、Mod 版本与 helper 运行依赖，并生成只在当前 Actions run 内使用的发行清单。
+- 两个平台使用实际发行 JAR 中的 helper 做离线首次运行烟测：隔离临时实例、默认已发行包自动管理、真实父 Java 进程退出后 helper 执行、JAR 摘要不变、第二次启动清理上次已退出的 helper。此探针不启动 Minecraft、不访问网络、不修改用户实例；它不能替代真实 NeoForge 客户端验收。
 - PR 只有 `contents: read`，不运行发布 job。没有 `pull_request_target`、跨 run 的 `workflow_run` 下载或来自 PR 的写权限。
-- 产物只从当前 run 的 Linux 构建获取；两个平台都独立检查 JAR 构建身份、Java 21 class 版本、伴随 Mod 版本与 checksums。
-- 候选产物保留两天，测试报告保留三天。PR 的旧验证可取消；发布 job 按渠道串行，不在发布途中自动取消。
+- 公开产物只从当前 run 的 Linux 构建取得。候选产物保留两天，Java 测试报告保留三天；产物和报告名包含 `run_attempt`，避免同次 run 重跑时读取旧身份。
 
-候选产物和报告名都包含 `run_attempt`，发布 job 只下载当前 attempt 的候选文件，避免重跑时读取旧版本身份或同名 artifact 冲突。发布失败后应选择 **Re-run all jobs**，重新通过两个平台的质量门禁；只重跑 failed release job 不会复用上一 attempt 的构建文件。
+发布失败后选择 **Re-run all jobs**，重新通过两平台质量门禁。仅重跑 failed release job 不会复用上一 attempt 的构建文件。PR 旧验证可取消；发布 job 按渠道串行，发布途中不自动取消。
 
-## 自动发行
+## 单 JAR 格式
 
-受信任 main push 通过检查后更新 `nightly`。发布脚本确认当前提交仍是 main 最新提交，并拒绝用旧 sequence 覆盖新 nightly。新文件上传并与 GitHub 返回的 asset digest/size 校验后，才发布最终清单并清理旧附件，成功后 nightly 只保留一套六个文件。
+公开附件只有：
 
-`vMAJOR.MINOR.PATCH`（也接受 semver prerelease 后缀）tag 通过检查后创建对应版本。提交必须已经位于 main 的历史中；不能仅给任意 PR 提交加 tag 就取得发布资格。已公开的版本不覆盖、不删档。相同提交的未公开失败草稿可以重试；已经发布的 tag 需用新版本号重新发行。
+```
+folkways-updater-neoforge-1.21.1-<version>.jar
+```
 
-草稿恢复使用有权限的 Release 列表分页查询，因为按 tag 查询只返回已公开版本。只有同 tag 唯一且指向当前完整提交的草稿可复用；有重复草稿、其他提交或查询不完整时停止发布，避免另建同名草稿或覆盖未知状态。
+Mod JAR 的 `META-INF/folkways-updater-build.json` 使用 schema 1、`component=companion`。`META-INF/folkways-updater/helper.jar` 内嵌独立 fat helper，包含 Gson、退出后更新入口及 `component=bootstrap` 的 BuildInfo。两层的版本、完整提交、runId、runNumber、runAttempt、sequence、channel 和 Minecraft 版本必须相同。
 
-发布 job 从受信任 main 检出发布工具，校验 Actions run 的仓库、push 事件、工作流路径、完整提交和构建标识。只有这个 job 请求临时 `GITHUB_TOKEN` 的 `contents: write` 和 `actions: read`；不使用长期 PAT，不新增签名密钥 secret。
+`updater-core:bootstrapJar` 仍是构建中的内部打包任务，不是需要用户单独安装的附件。`dist` 仅保留 Mod JAR 与内部 `update-metadata.json`，后者绑定当前候选摘要、文件名和构建来源，供发布 job 再次校验。发布脚本显式只上传该 JAR；内部清单、standalone JAR、seed 脚本和 checksums 均不上传。
 
-## 文件与版本
+## 自动发行与恢复
 
-每个 Release 有六个附件：
+受信任 main push 通过检查后更新 `nightly`。发布脚本确认提交仍是 main 当前提交，并从既有 nightly 的 companion JAR 读取高水位：先以官方 API 返回的 SHA256 digest 和大小校验下载内容，再读取 JAR 内 BuildInfo。读取最多 64 MiB，缺少可信摘要、构建来源无效或候选不明确时停止发布。
 
-| 文件 | 用途 |
-| --- | --- |
-| `folkways-bootstrap-<version>-standalone.jar` | 独立 Bootstrap 与更新核心 |
-| `folkways-updater-neoforge-1.21.1-<version>.jar` | NeoForge 游戏内伴随 Mod |
-| `launch.ps1`、`launch.sh` | 首次手工安装的稳定 seed 启动入口 |
-| `update-metadata.json` | 自更新机器清单，绑定两个 JAR 的版本、摘要和构建来源 |
-| `checksums.sha256` | 两个 JAR、两个 seed 与元数据的 SHA256 |
+新 JAR 上传并与 GitHub 返回的 digest/size 校验成功后，才清理旧附件并完成发布。成功后的 nightly 只有一个 Mod JAR。原来包含 standalone、脚本和清单的旧 nightly 可以迁移；历史版本 Release 保留。
 
-main 的版本为 `0.1.0-nightly.<run_number>.<run_attempt>`；版本 tag 去掉 `v` 得到对应版本。metadata 与 JAR build-info 的 `runNumber` 为整数，sequence 为 `run_number * 1000 + run_attempt`，同一次 run 的重试也有更大序号。`runId` 保留为字符串，用来查询官方 Actions run；客户端同时核对官方 `run_number`。JAR 内 `META-INF/folkways-updater-build.json` 记录相同版本、提交、run 和 sequence，本地未注入这些参数的构建保留开发身份。
+上传与清理之间不是跨附件原子事务，期间客户端可能遇到多个 companion 附件，须拒绝并稍后重试。发布中断后，只有文件名、官方 digest、size 都与本次候选完全相同的已上传 JAR 可作为受限恢复对象：忽略它后仍须唯一确认旧包高水位，其他未知附件不能决定信任。已完成的同字节 nightly 重跑不写入；旧 sequence 不覆盖新包。
 
-GitHub 为同一 workflow 的 `run_number` 提供逐次递增保证，而 `run_id` 只保证唯一。必须保持 `.github/workflows/ci.yml` 的工作流路径和身份稳定，不能删除后重建并复位计数；若确需迁移，应先设计受信任的序号迁移，而不是让客户端忽略高水位。每次 attempt 限制在 1–999，避免与下一个 run 的序号空间重叠。
+`vMAJOR.MINOR.PATCH`（也接受 semver prerelease 后缀）tag 通过检查后创建对应版本。提交须已位于 main 历史；已公开的版本不可覆盖、不删档。相同提交的未公开草稿可重试。按 tag 的 REST 查询只返回公开版本，因此恢复时使用授权 Release 列表分页查找，只有同 tag 唯一且指向当前完整提交的草稿可复用。
 
-CI 将 `-Pversion`、`-PbuildId`、`-PrunId`、`-PrunNumber`、`-PrunAttempt`、`-Psequence`、`-Pchannel` 传给 Gradle。不能只依赖文件名或固定 `0.1.0-dev` 比较新旧。
+发布 job 从受信任 main 检出发布工具，校验 Actions run 的仓库、push 事件、工作流路径、提交和构建标识。只有此 job 请求临时 `GITHUB_TOKEN` 的 `contents: write` 和 `actions: read`；不使用长期 PAT、不新增签名密钥 secret。
 
-## 信任与安装边界
+## 版本与信任
 
-自动私钥签名目前未启用。自更新客户端以固定公开仓库 `davisye/update-folkways` 的**官方 GitHub API**为信任来源：检查 asset 的 GitHub digest/size，并把清单提交与对应 Actions run 关联。run 必须已经 `completed/success` 才安装，因此发布 job 尚在运行时可能暂时提示稍后重试。用户镜像可传输相同字节，不能独立决定可信摘要。
+main 的版本为 `0.1.0-nightly.<run_number>.<run_attempt>`，版本 tag 去掉 `v` 得到对应版本。BuildInfo 中 `runNumber` 为整数，`sequence=run_number * 1000 + run_attempt`，`runId` 为官方 Actions run 查询标识。CI 将 `-Pversion`、`-PbuildId`、`-PrunId`、`-PrunNumber`、`-PrunAttempt`、`-Psequence`、`-Pchannel` 传给 Gradle；本地未注入这些参数的构建保持开发身份。
 
-首次安装仍需按 README 手工放好 seed、Bootstrap 和伴随 Mod。seed 协议 v1 不自动替换脚本；两个 JAR 的自更新通过运行副本、离线 helper 和启动门禁完成。只执行旧的 `java -jar` 入口不能保证覆盖正在使用的 Bootstrap。
+GitHub 为同一 workflow 的 `run_number` 提供逐次递增保证，`run_id` 只保证唯一。保持 `.github/workflows/ci.yml` 路径和身份稳定，不删除重建复位计数；每次 attempt 限制在 1–999。迁移工作流前须设计可信序号迁移。
 
-GitHub Release 附件集合没有多文件原子提交保证。上传中断或不同代缓存必须导致客户端拒绝安装并有限重试；不得以 HTTP 200 或“附件存在”代替摘要与 run 验证。稳定版本的长期可用性取决于仓库保留策略，nightly 明确只保留最新一套。
+自动私钥签名尚未启用。客户端固定以公开仓库 `davisye/update-folkways` 的官方 GitHub API 为信任来源，核验附件 digest/size，以及包内提交、版本和成功的官方 `ci.yml` push run。run 需已 `completed/success`；发布 job 仍运行时可暂时拒绝并稍后重试。镜像可传输相同字节，不能独立决定可信摘要。
+
+已发行的单 JAR 首次运行自动建立管理归属、预下载更新，退出后的 helper 执行替换；不需要用户安装脚本或 standalone。默认本地源码构建受保护，显式启用本地开发模式也禁止替换。真实游戏的退出事件、文件锁和重新启动行为仍需客户端与服务端验收，离线探针只覆盖进程和包格式。
 
 ## Action 固定版本
 
-2026-10-23 从官方仓库发布 tag 解析到以下完整 commit，工作流使用 SHA 而不是可变 tag：
+以下完整 commit 在 2026-10-23 从官方发布 tag 解析；工作流使用 SHA：
 
 | Action | 官方版本 | 固定 commit |
 | --- | --- | --- |

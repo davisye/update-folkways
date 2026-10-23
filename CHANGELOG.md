@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 主安装流程改为一个 NeoForge Mod JAR，内嵌 helper 自动释放；不再要求用户手放 standalone、seed、元数据或密钥。
+- 自身更新改为运行时检查/预下载、整个 JVM 退出后安装、下次启动加载，不承诺首次扫描前最新。
+- 官方发行且没有现有配置的新实例默认 managed；已有配置、源码构建、NeoForge dev 环境和显式开发保护保留。
+- 旧 Bootstrap/seed 方式及 6.1→7.1 验收作为历史兼容方式记录，不代替 drop-in 实测。
+
+### Verification pending
+
+- 两个公开单 JAR 版本的网络升级、快速重开竞态与真实安装中断恢复仍需补充。
+- Folkways 公共自动签名继续延期，未配置可信清单时不自动替换其 JAR。
+
+### Verified locally
+
+- 单 updater 的真实 NeoForge 专服完成正常存档、整 JVM 重启、原世界重开、限额拒绝保活与正常关闭；使用合成测试构建，未测试完整 Folkways 包、真实玩家或客户端。
+
 ## [0.1.0-rc.1] - 2026-10-23
 
 ### Added
