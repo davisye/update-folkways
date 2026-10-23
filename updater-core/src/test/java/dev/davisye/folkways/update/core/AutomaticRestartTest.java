@@ -61,8 +61,16 @@ class AutomaticRestartTest {
         public static void main(String[] args) throws Exception {
             Path game = Path.of(args[0]);
             if (!Files.isSameFile(Path.of("").toAbsolutePath(), game)) throw new AssertionError("cwd changed");
-            if (!List.of("space arg", "中文路径", "quote\"arg", "backslash\\", "", "x".repeat(10000)).equals(Arrays.asList(args).subList(2, args.length)))
-                throw new AssertionError("Argument vector changed");
+            List<String> expectedArgs = List.of("space arg", "中文路径", "quote\"arg", "backslash\\", "", "x".repeat(10000));
+            List<String> actualArgs = Arrays.asList(args).subList(2, args.length);
+            if (!expectedArgs.equals(actualArgs)) {
+                StringBuilder diagnostic = new StringBuilder("Synthetic argument vector changed: expected count=").append(expectedArgs.size()).append(", actual count=").append(actualArgs.size());
+                for (int i = 0; i < Math.min(expectedArgs.size(), actualArgs.size()); i++) if (!expectedArgs.get(i).equals(actualArgs.get(i)))
+                    diagnostic.append("; index=").append(i).append(" expectedLength=").append(expectedArgs.get(i).length())
+                            .append(" actualLength=").append(actualArgs.get(i).length()).append(" firstCodePoints=")
+                            .append(Arrays.toString(actualArgs.get(i).codePoints().limit(24).toArray()));
+                throw new AssertionError(diagnostic);
+            }
             Path countFile = game.resolve("launch-count");
             int count = Files.exists(countFile) ? Integer.parseInt(Files.readString(countFile)) + 1 : 1;
             Files.writeString(countFile, Integer.toString(count));
