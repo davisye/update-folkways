@@ -8,7 +8,7 @@
   "folkways_updater.config.local": "Local development: %s",
   "folkways_updater.config.on": "On",
   "folkways_updater.config.off": "Off",
-  "folkways_updater.config.local_help": "Protect local builds: disable ALL downloads and replacements. IDE/environment/marker protection stays effective even if this toggle is off.",
+  "folkways_updater.config.local_help": "Pause only Folkways and dependency checks, downloads and replacement. Updater self-updates remain independent. Legacy markers and a manually installed updater cannot enable this mode.",
   "folkways_updater.config.network": "Network: %s",
   "folkways_updater.config.policy.mirror-first": "Mirror first",
   "folkways_updater.config.policy.direct-first": "Direct first",
@@ -41,7 +41,7 @@
   "folkways_updater.config.save_error": "Save failed. Check config.json and file permissions, then retry.",
   "folkways_updater.status.idle": "Automatic check starts 15 seconds after launch.",
   "folkways_updater.status.checking": "Checking and verifying downloads in the background...",
-  "folkways_updater.status.local": "Local development protection is active; downloads and replacements are disabled.",
+  "folkways_updater.status.local": "Local development: only Folkways and dependency updates are paused.",
   "folkways_updater.status.config_error": "Cannot read updater settings; current files retained.",
   "folkways_updater.status.self_error": "Updater self-check unavailable; current updater retained.",
   "folkways_updater.status.folkways_error": "Folkways check failed. Check official API access, selected channel, installed files and dependencies; current files retained.",
@@ -53,5 +53,9 @@
   "folkways_updater.status.self_current": "Updater is current.",
   "folkways_updater.status.self_ready": "Updater is downloaded; fully quit to install.",
   "folkways_updater.status.self_disabled": "Updater self-update is disabled.",
-  "folkways_updater.status.official_unavailable": "Official GitHub verification is unavailable. Check API access; mirror downloads alone cannot establish trust."
+  "folkways_updater.status.official_unavailable": "Official GitHub verification is unavailable. Check API access; mirror downloads alone cannot establish trust.",
+  "folkways_updater.config.self_help": "Update this updater independently of local development mode. Local mode does not disable self-updates.",
+  "folkways_updater.status.self_no_target": "This IDE run has no installed updater JAR to replace.",
+  "folkways_updater.status.self_verification_unavailable": "Official updater verification is unavailable; current updater retained. Folkways checks remain independent.",
+  "folkways_updater.status.settings_changed": "Settings applied; Folkways and updater checks follow their independent switches."
 }

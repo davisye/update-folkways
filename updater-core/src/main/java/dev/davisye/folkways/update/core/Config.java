@@ -12,9 +12,9 @@ import java.nio.file.StandardOpenOption;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
-/** Shared disk config; defaults deliberately protect source builds. */
+/** Shared disk config. Local mode is explicit and only governs Folkways and dependencies. */
 public final class Config {
-    public boolean localDevelopment = true;
+    public boolean localDevelopment = false;
     public boolean commandsEnabled = false;
     public int pollSeconds = 900;
     public String repository = "IzakyL/folkways";
@@ -65,9 +65,8 @@ public final class Config {
     }
 
     public boolean isLocalDevelopment(Path gameDir) {
-        return localDevelopment || Boolean.getBoolean("folkways.localDevelopment")
-            || "true".equalsIgnoreCase(System.getenv("FOLKWAYS_LOCAL_DEVELOPMENT"))
-            || Files.exists(gameDir.resolve(".folkways-updater/LOCAL_DEVELOPMENT"));
+        // The UI switch is the single authority; legacy environment/marker hints are not settings.
+        return localDevelopment;
     }
 
     public void validate() throws IOException {

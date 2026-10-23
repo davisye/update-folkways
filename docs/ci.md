@@ -40,13 +40,13 @@ Mod JAR 的 `META-INF/folkways-updater-build.json` 使用 schema 1、`component=
 
 ## 版本与信任
 
-main 的版本为 `0.1.0-nightly.<run_number>.<run_attempt>`，版本 tag 去掉 `v` 得到对应版本。BuildInfo 中 `runNumber` 为整数，`sequence=run_number * 1000 + run_attempt`，`runId` 为官方 Actions run 查询标识。CI 将 `-Pversion`、`-PbuildId`、`-PrunId`、`-PrunNumber`、`-PrunAttempt`、`-Psequence`、`-Pchannel` 传给 Gradle；本地未注入这些参数的构建保持开发身份。
+main 的版本为 `0.1.0-nightly.<run_number>.<run_attempt>`，版本 tag 去掉 `v` 得到对应版本。BuildInfo 中 `runNumber` 为整数，`sequence=run_number * 1000 + run_attempt`，`runId` 为官方 Actions run 查询标识。CI 将 `-Pversion`、`-PbuildId`、`-PrunId`、`-PrunNumber`、`-PrunAttempt`、`-Psequence`、`-Pchannel` 传给 Gradle；本地未注入这些参数的构建保持开发身份。构建身份用于来源核验，不会自动开启 `config.localDevelopment`。
 
 GitHub 为同一 workflow 的 `run_number` 提供逐次递增保证，`run_id` 只保证唯一。保持 `.github/workflows/ci.yml` 路径和身份稳定，不删除重建复位计数；每次 attempt 限制在 1–999。迁移工作流前须设计可信序号迁移。
 
 自动私钥签名尚未启用。客户端固定以公开仓库 `davisye/update-folkways` 的官方 GitHub API 为信任来源，核验附件 digest/size，以及包内提交、版本和成功的官方 `ci.yml` push run。run 需已 `completed/success`；发布 job 仍运行时可暂时拒绝并稍后重试。镜像可传输相同字节，不能独立决定可信摘要。
 
-已发行的单 JAR 首次运行自动建立管理归属、预下载更新，退出后的 helper 执行替换；不需要用户安装脚本或 standalone。默认本地源码构建受保护，显式启用本地开发模式也禁止替换。真实游戏的退出事件、文件锁和重新启动行为仍需客户端与服务端验收，离线探针只覆盖进程和包格式。
+已发行的单 JAR 首次运行自动建立管理归属、预下载更新，退出后的 helper 执行替换；不需要用户安装脚本或 standalone。本地开发只暂停 Folkways/依赖；自身检查、预下载与退出后替换由 `selfUpdateEnabled` 独立控制，来源及事务校验不因此省略。IDE 中没有已安装 JAR 时没有自身替换目标。真实游戏的退出事件、文件锁和重新启动行为仍需客户端与服务端验收，离线探针只覆盖进程和包格式。
 
 ## Action 固定版本
 

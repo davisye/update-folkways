@@ -83,10 +83,6 @@ public final class UpdaterMod {
         try {
             Config config = Config.load(gameDir);
             if (config.commandsEnabled) prepareAutomaticRestart();
-            if (!FMLEnvironment.production) {
-                LOG.info("Local development: automatic update polling and replacement are disabled");
-                return;
-            }
             polling = Executors.newSingleThreadScheduledExecutor(task -> {
                 Thread thread = new Thread(task, "folkways-update-poll");
                 thread.setDaemon(true);
@@ -97,7 +93,7 @@ public final class UpdaterMod {
                 if (System.nanoTime() < nextPoll) return;
                 try {
                     Config current = Config.load(gameDir);
-                    nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(current.isLocalDevelopment(gameDir) ? 5 : current.pollSeconds);
+                    nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(current.pollSeconds);
                     check(event.getServer());
                 } catch (Exception e) { nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(60); }
             }, 5, 5, TimeUnit.SECONDS);
@@ -107,12 +103,15 @@ public final class UpdaterMod {
     private void check(MinecraftServer server) {
         if (stopping || !checking.compareAndSet(false, true)) return;
         try {
-            if (!FMLEnvironment.production || localProtection()) return;
             String self;
             try { self = checkOwnUpdate(); }
             catch (Exception e) { self = "Updater self-check unavailable; current updater retained"; }
             String folkways;
-            try { folkways = folkwaysUpdater().checkAndStage(); }
+            try {
+                folkways = Config.load(gameDir).isLocalDevelopment(gameDir)
+                        ? "本地开发已开启：仅暂停 Folkways 与前置更新；更新器自身独立更新。"
+                        : folkwaysUpdater().checkAndStage();
+            }
             catch (Exception e) { folkways = "Folkways check unavailable; installed Folkways retained"; }
             String notice = self + " | " + folkways;
             if (!stopping && !notice.equals(lastNotice)) {
@@ -135,16 +134,14 @@ public final class UpdaterMod {
                 .requires(source -> source.hasPermission(4))
                 .then(Commands.literal("status").executes(context -> {
                     try {
-                        String status = folkwaysUpdater().status() + " | " + (dropIn == null ? "Local IDE build: updater replacement disabled" : dropIn.status());
+                        String status = folkwaysUpdater().status() + " | " + (dropIn == null ? "No installed updater JAR target in this IDE run" : dropIn.status());
                         context.getSource().sendSuccess(() -> Component.literal(status), false);
                         return 1;
                     } catch (Exception e) { return fail(context.getSource(), "无法读取更新状态。"); }
                 }))
                 .then(Commands.literal("check").executes(context -> {
                     try {
-                        if (!FMLEnvironment.production || localProtection()) {
-                            return fail(context.getSource(), "本地开发模式，更新已禁用。");
-                        }
+                        Config.load(gameDir);
                     } catch (Exception e) { return fail(context.getSource(), "无法读取更新配置。"); }
                     if (stopping) return fail(context.getSource(), "正在关闭，无法安排检查。");
                     Thread.ofPlatform().daemon(true).name("folkways-manual-check")
@@ -200,12 +197,12 @@ public final class UpdaterMod {
     }
 
     static boolean localProtection() throws Exception {
-        return dropIn == null || dropIn.localProtection();
+        return Config.load(FMLPaths.GAMEDIR.get()).localDevelopment;
     }
 
     static String checkOwnUpdate() throws Exception {
         DropInUpdater updater = dropIn;
-        if (updater == null) return "Local IDE build: updater replacement disabled";
+        if (updater == null) return "No installed updater JAR target in this IDE run";
         updater.startHelper();
         return updater.checkAndStage();
     }

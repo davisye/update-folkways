@@ -12,7 +12,6 @@ import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -41,6 +40,12 @@ public final class ClientUpdates {
     public static Component status() { return status; }
     public static boolean checking() { return CHECKING.get(); }
 
+    /** Never keep a previous mode's result visible after its switch has been saved. */
+    public static void settingsSaved() {
+        nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        if (!CHECKING.get()) status = text("settings_changed");
+    }
+
     /** Saving local protection remains possible while this background operation is running. */
     public static boolean requestCheck() {
         if (!CHECKING.compareAndSet(false, true)) return false;
@@ -53,25 +58,18 @@ public final class ClientUpdates {
     public static void tick(ClientTickEvent.Post event) {
         if (!initialized) {
             initialized = true;
-            if (FMLEnvironment.production) {
-                nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
-                WORKER.scheduleWithFixedDelay(() -> {
-                    if (System.nanoTime() < nextPoll) return;
-                    try {
-                        Config current = Config.load(GAME_DIR);
-                        if (current.isLocalDevelopment(GAME_DIR)) {
-                            nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-                            status = text("local");
-                            return;
-                        }
-                        nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(current.pollSeconds);
-                        requestCheck();
-                    } catch (Exception error) {
-                        status = text("config_error");
-                        nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
-                    }
-                }, 5, 5, TimeUnit.SECONDS);
-            } else status = text("local");
+            nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+            WORKER.scheduleWithFixedDelay(() -> {
+                if (System.nanoTime() < nextPoll) return;
+                try {
+                    Config current = Config.load(GAME_DIR);
+                    nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(current.pollSeconds);
+                    requestCheck();
+                } catch (Exception error) {
+                    status = text("config_error");
+                    nextPoll = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+                }
+            }, 5, 5, TimeUnit.SECONDS);
         }
         Component notice = queuedNotice;
         if (notice != null) {
@@ -85,10 +83,6 @@ public final class ClientUpdates {
 
     private static void check() {
         try {
-            if (!FMLEnvironment.production || UpdaterMod.localProtection()) {
-                status = text("local");
-                return;
-            }
             String self;
             try { self = UpdaterMod.checkOwnUpdate(); }
             catch (Exception error) {
@@ -96,7 +90,10 @@ public final class ClientUpdates {
                 self = text("self_error").getString();
             }
             String folkways;
-            try { folkways = UpdaterMod.folkwaysUpdater().checkAndStage(); }
+            try {
+                folkways = Config.load(GAME_DIR).isLocalDevelopment(GAME_DIR)
+                        ? text("local").getString() : UpdaterMod.folkwaysUpdater().checkAndStage();
+            }
             catch (Exception error) {
                 LOG.warn("Folkways check unavailable ({})", error.getClass().getSimpleName());
                 folkways = failure(error);
@@ -139,6 +136,8 @@ public final class ClientUpdates {
         else if (result.startsWith("Updater already current")) key = "self_current";
         else if (result.startsWith("Updater downloaded:") || result.startsWith("Updater already downloaded")) key = "self_ready";
         else if (result.equals("Updater self-update disabled")) key = "self_disabled";
+        else if (result.equals("No installed updater JAR target in this IDE run")) key = "self_no_target";
+        else if (result.startsWith("Updater verification temporarily unavailable")) key = "self_verification_unavailable";
         return key == null ? result : text(key).getString();
     }
 

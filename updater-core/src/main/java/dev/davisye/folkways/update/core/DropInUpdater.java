@@ -28,10 +28,6 @@ public final class DropInUpdater {
         Updater u = new Updater(game);
         // Deliberately outside update.lock: a helper already holding the mutation lock must see this JVM.
         RuntimeLease.recordGame(u);
-        if (developmentEnvironment || Boolean.getBoolean("folkways.localDevelopment") || "true".equalsIgnoreCase(System.getenv("FOLKWAYS_LOCAL_DEVELOPMENT"))) {
-            // Sticky by design: an older already-running helper must also see a newer JVM's local protection.
-            Updater.atomic(u.home.resolve("LOCAL_DEVELOPMENT"), "IDE/JVM/environment local-development protection\n".getBytes(StandardCharsets.UTF_8));
-        }
         String conflict = u.locked(() -> {
             if (System.currentTimeMillis() < currentStart().toEpochMilli()) throw new IOException("Clock moved behind this JVM's start; loading refused");
             Path legacy = u.home.resolve("self-journal.json"); u.safe(legacy);
@@ -85,7 +81,7 @@ public final class DropInUpdater {
             }
             Path configPath = result.u.home.resolve("config.json"); result.u.safe(configPath);
             if (!Files.exists(configPath)) {
-                Config config = new Config(); config.localDevelopment = !SelfUpdater.publishedBuild(build);
+                Config config = new Config(); config.localDevelopment = false;
                 if (SelfUpdater.publishedBuild(build)) config.selfUpdateChannel = build.channel;
                 Updater.atomic(configPath, json(config));
             }
@@ -93,18 +89,24 @@ public final class DropInUpdater {
             State state = result.state();
             if (state.owned == null) {
                 state.owned = new SelfUpdater.Owned(result.u.game.relativize(jar).toString().replace('\\', '/'), Updater.sha(bytes), bytes.length);
-                state.build = build; state.localBuild = !SelfUpdater.publishedBuild(build); state.highest = Math.max(0, build.sequence);
+                state.build = build; state.localBuild = !SelfUpdater.publishedBuild(build); state.highest = state.localBuild ? 0 : Math.max(0, build.sequence);
+                state.highestSha256 = state.localBuild ? null : state.owned.sha256;
                 result.save(state);
             } else {
-                boolean matches = result.target(state).equals(jar) && SelfUpdater.sameBuild(state.build, build);
-                if (matches) try { result.owned(state); } catch (IOException e) { matches = false; }
+                boolean sameBytes = state.owned.size == bytes.length && state.owned.sha256.equals(Updater.sha(bytes)) && SelfUpdater.sameBuild(state.build, build);
+                boolean samePath = result.target(state).equals(jar);
+                boolean matches = sameBytes && (samePath || !Files.exists(result.target(state)));
                 Path protection = result.u.home.resolve("dropin-unmanaged.json"); result.u.safe(protection);
-                if (!matches) {
-                    // A manual/local build may run, but never silently resets the previously trusted baseline.
+                if (matches) {
+                    // A rename of exactly the recorded bytes changes no trust or anti-rollback state.
+                    if (!samePath) { state.owned.path = result.u.game.relativize(jar).toString().replace('\\', '/'); result.save(state); }
+                    Files.deleteIfExists(protection);
+                } else {
+                    // Observe manual bytes for a race-safe official replacement; this is not a new owned baseline.
                     Unmanaged value = new Unmanaged(); value.path = result.u.game.relativize(jar).toString().replace('\\', '/');
                     value.sha256 = Updater.sha(bytes); value.size = bytes.length; value.build = build;
                     Updater.atomic(protection, json(value));
-                } else Files.deleteIfExists(protection);
+                }
             }
             result.pruneHelpers();
             return null;
@@ -115,29 +117,34 @@ public final class DropInUpdater {
     public String status() throws Exception {
         State state = state(); Config config = Config.load(u.game);
         return "drop-in updater=" + (state.build == null ? "unadopted" : state.build.version)
-            + ", pending=" + (state.pending != null) + ", local=" + (state.localBuild || config.isLocalDevelopment(u.game))
-            + ", manual/local protection=" + unmanaged() + ", helper=" + helperAlive();
+            + ", pending=" + (state.pending != null) + ", Folkways local=" + config.isLocalDevelopment(u.game)
+            + ", self-update=" + config.selfUpdateEnabled + ", manual verification pending=" + unmanaged() + ", helper=" + helperAlive();
     }
-    public boolean localProtection() throws Exception { return Config.load(u.game).isLocalDevelopment(u.game) || state().localBuild || unmanaged(); }
+    public boolean localProtection() throws Exception { return Config.load(u.game).isLocalDevelopment(u.game); }
     public String checkAndStage() throws Exception {
         Config config = Config.load(u.game);
-        if (config.isLocalDevelopment(u.game)) return "Local development: updater replacement disabled";
-        if (unmanaged()) return "Manual/local updater build: replacement disabled; recorded ownership retained";
         if (!config.selfUpdateEnabled) return "Updater self-update disabled";
-        return u.locked(() -> {
+        try { return u.locked(() -> {
+            rejectLegacyTransaction();
+            if (Files.exists(u.home.resolve(JOURNAL))) throw new IOException("An unfinished updater transaction requires exit recovery before checking updates");
             State state = state();
             if (state.owned == null) return "Updater ownership not initialized";
-            if (state.localBuild) return "Locally compiled updater: replacement disabled";
-            managed(config); owned(state); restorePending(state);
+            managed(config); Unmanaged observed = actual(state); restorePending(state);
             SelfUpdater.Source source = source(config);
+            if (observed != null && SelfUpdater.publishedBuild(observed.build)) {
+                State reconciled = null;
+                try { reconciled = reconcileOfficial(state, observed, source); }
+                catch (VerificationUnavailable ignored) { /* Historical nightly assets may be gone; verify the selected latest target independently. */ }
+                if (reconciled != null) { state = reconciled; observed = null; }
+            }
             SelfUpdater.ApiRelease release = SelfUpdater.officialRelease(source, config);
             SelfUpdater.Asset asset = selectedAsset(release);
             String digest = SelfUpdater.hashOf(asset);
             if (asset.size > LIMIT) throw new IOException("Updater asset exceeds limit");
-            if (digest.equals(state.owned.sha256)) return "Updater already current: " + state.build.version;
+            if (observed == null && digest.equals(state.owned.sha256)) { cleanCommittedPending(state); return "Updater already current: " + state.build.version; }
             if (state.pending != null) {
                 Proof previous = pending(state);
-                if (digest.equals(SelfUpdater.hashOf(previous.asset))) return "Updater already downloaded; installs after the game JVM exits";
+                if (digest.equals(SelfUpdater.hashOf(previous.asset)) && sameObserved(observed, previous.observed)) return "Updater already downloaded; installs after the game JVM exits";
             }
             byte[] bytes = source.asset(asset.browser_download_url, asset.size, digest);
             Updater.verify(bytes, digest, asset.size);
@@ -147,19 +154,22 @@ public final class DropInUpdater {
             if (runBytes.length > 2 * 1024 * 1024) throw new IOException("CI response exceeds limit");
             SelfUpdater.Run run = decode(runBytes, SelfUpdater.Run.class);
             verifyRun(build, release, run);
-            if (build.sequence <= state.highest) throw new IOException("Updater is older or reuses an accepted sequence");
-            if (state.pending != null && build.sequence <= pending(state).build.sequence) throw new IOException("Updater does not advance the queued build");
+            if (build.sequence < state.highest || build.sequence == state.highest && !digest.equals(highestDigest(state))) throw new IOException("Updater is older or reuses an accepted sequence");
+            if (state.pending != null) {
+                Proof previous = pending(state);
+                if (build.sequence < previous.build.sequence || build.sequence == previous.build.sequence && !digest.equals(SelfUpdater.hashOf(previous.asset))) throw new IOException("Updater does not advance the queued build");
+            }
             // Also bind the hidden executable payload to this exact outer JAR's complete build identity.
             helperPayload(bytes, build);
             SelfUpdater.ApiRelease after = SelfUpdater.officialRelease(source, config);
             if (!SelfUpdater.releaseFingerprint(release).equals(SelfUpdater.releaseFingerprint(after))) throw new IOException("Updater release changed during download");
-            Proof proof = new Proof(); proof.asset = asset; proof.release = release; proof.run = run; proof.build = build;
+            Proof proof = new Proof(); proof.asset = asset; proof.release = release; proof.run = run; proof.build = build; proof.observed = observed;
             byte[] proofBytes = json(proof);
             Path candidate = u.home.resolve("dropin-candidate"), queued = u.home.resolve("dropin-pending"), previous = u.home.resolve("dropin-pending.previous");
             u.clear(candidate); u.directory(candidate);
             try {
                 Updater.atomic(candidate.resolve("mod.jar"), bytes); Updater.atomic(candidate.resolve("proof.json"), proofBytes);
-                managed(config); owned(state());
+                managed(config); verifyActual(state(), proof.observed);
                 if (Files.exists(previous)) throw new IOException("Unresolved previous updater cache");
                 if (Files.exists(queued)) Files.move(queued, previous, StandardCopyOption.ATOMIC_MOVE);
                 try {
@@ -172,14 +182,16 @@ public final class DropInUpdater {
                 u.clear(previous);
             } finally { u.clear(candidate); }
             return "Updater downloaded: " + build.version + "; installs after the game JVM exits";
-        });
+        }); } catch (VerificationUnavailable e) { return "Updater verification temporarily unavailable; current updater retained and Folkways checks remain independent"; }
     }
     private SelfUpdater.Source source(Config config) {
-        if (injected != null) return injected;
         Transport transport = new Transport(config);
         return new SelfUpdater.Source() {
-            public byte[] official(String url, long maximum) throws Exception { return transport.fetchOfficialApi(url, maximum); }
-            public byte[] asset(String url, long maximum, String digest) throws Exception { return transport.fetchValidated(url, maximum, bytes -> Updater.verify(bytes, digest, maximum)); }
+            public byte[] official(String url, long maximum) throws Exception {
+                try { return injected == null ? transport.fetchOfficialApi(url, maximum) : injected.official(url, maximum); }
+                catch (IOException e) { throw new VerificationUnavailable(e); }
+            }
+            public byte[] asset(String url, long maximum, String digest) throws Exception { return injected == null ? transport.fetchValidated(url, maximum, bytes -> Updater.verify(bytes, digest, maximum)) : injected.asset(url, maximum, digest); }
         };
     }
 
@@ -191,15 +203,18 @@ public final class DropInUpdater {
             Path pointer = u.home.resolve("dropin-helper.json");
             if (Files.exists(pointer)) {
                 HelperOwner old = read(u, pointer, HelperOwner.class);
-                if (alive(old)) throw new IOException("Another game owns the active exit helper");
+                if (alive(old) && !releaseOldHelper(old)) return "An earlier exit helper is still finishing; updater checks remain available";
             }
             pruneHelpers(); State state = state();
             Path installed = target(state); SelfUpdater.BuildInfo build = state.build;
             if (recovery && Files.exists(u.home.resolve(JOURNAL))) {
                 Journal journal = read(u, u.home.resolve(JOURNAL), Journal.class);
-                if (journal == null || journal.before == null || journal.after == null || !target(journal.before).equals(installed) || !target(journal.after).equals(installed)) throw new IOException("Invalid recovery ownership");
+                if (journal == null || journal.before == null || journal.after == null) throw new IOException("Invalid recovery ownership");
+                SelfUpdater.Owned old = journal.actualBefore == null ? journal.before.owned : journal.actualBefore;
+                State temporary = new State(); temporary.owned = old; installed = target(temporary);
+                if (!target(journal.after).equals(installed)) throw new IOException("Invalid recovery target");
                 unique(installed); byte[] current = u.readBounded(installed, LIMIT); String hash = Updater.sha(current);
-                if (!hash.equals(journal.before.owned.sha256) && !hash.equals(journal.after.owned.sha256)) throw new IOException("Local changes block recovery helper");
+                if (!hash.equals(old.sha256) && !hash.equals(journal.after.owned.sha256)) throw new IOException("Local changes block recovery helper");
                 build = SelfUpdater.jar(current, "companion", null);
             } else if (unmanaged()) {
                 Unmanaged manual = read(u, u.home.resolve("dropin-unmanaged.json"), Unmanaged.class);
@@ -212,10 +227,10 @@ public final class DropInUpdater {
             Path runtime = u.home.resolve("dropin-runtime/helper-" + UUID.randomUUID()); u.directory(runtime);
             Updater.atomic(runtime.resolve("helper.jar"), payload);
             HelperOwner intent = new HelperOwner(); intent.parentPid = ProcessHandle.current().pid(); intent.parentStart = currentStart().toString(); intent.token = UUID.randomUUID().toString();
+            intent.installed = snapshot(installed, build);
             intent.runtime = u.game.relativize(runtime).toString().replace('\\', '/');
             Updater.atomic(runtime.resolve("intent.json"), json(intent));
             List<String> command = new ArrayList<>(List.of(javaExecutable().toString()));
-            if (Boolean.getBoolean("folkways.localDevelopment")) command.add("-Dfolkways.localDevelopment=true");
             // Java 21's Windows launcher converts main arguments through the active ANSI code page.
             // Keep the internal command ASCII and let the JVM resolve the relative class path from its Unicode cwd.
             command.addAll(List.of("-cp", "helper.jar", Helper.class.getName(),
@@ -256,13 +271,17 @@ public final class DropInUpdater {
     String applyOffline() throws Exception {
         u.locked(() -> { rejectLegacyTransaction(); return null; });
         Config config = Config.load(u.game);
-        if (config.isLocalDevelopment(u.game) || unmanaged() || state().localBuild) {
-            if (Files.exists(u.home.resolve(JOURNAL)) || Files.exists(u.home.resolve("journal.json")) || Files.exists(u.home.resolve(GitHubFolkways.JOURNAL))) throw new IOException("Local mode blocks interrupted installation recovery");
-            return "Local development/manual build: files retained";
-        }
         mutationCheck();
         u.locked(() -> { recover(); return null; });
-        if (config.selfUpdateEnabled && !state().localBuild) u.locked(() -> { applySelf(config); return null; });
+        String selfReport = "";
+        if (config.selfUpdateEnabled) {
+            try { u.locked(() -> { applySelf(config); return null; }); }
+            catch (RuntimeLease.ActiveGameException e) { throw e; }
+            catch (Exception e) {
+                if (Files.exists(u.home.resolve(JOURNAL)) || clockRollback) throw e;
+                selfReport = "Updater installation deferred (" + e.getClass().getSimpleName() + "); ";
+            }
+        }
         // A configured signed Folkways channel remains independent of self-update publication.
         u.installGate = new Updater.InstallGate() {
             public void check() throws Exception { mutationCheck(); }
@@ -270,44 +289,58 @@ public final class DropInUpdater {
         };
         if (Files.exists(u.home.resolve("journal.json")) || Files.exists(u.home.resolve(GitHubFolkways.JOURNAL))
             || Files.exists(u.home.resolve("github-folkways-pending/plan.json")) || (!config.manifestUrl.isBlank() && Files.exists(u.home.resolve("pending/manifest.json")))) u.applyPending();
-        return "Exit helper completed; verified pending files installed or current files retained";
+        return selfReport + "Exit helper completed; verified pending files installed or current files retained";
     }
     private void applySelf(Config config) throws Exception {
         State state = state(); restorePending(state);
         if (state.pending == null) return;
-        managed(config); mutationCheck(); owned(state);
+        mutationCheck(); managed(config);
         Proof proof = pending(state);
-        if (proof.build.sequence <= state.highest) throw new IOException("Queued updater is not newer");
-        Path target = target(state), queued = u.home.resolve("dropin-pending/mod.jar");
+        verifyActual(state, proof.observed);
+        String digest = SelfUpdater.hashOf(proof.asset);
+        if (proof.build.sequence < state.highest || proof.build.sequence == state.highest && !digest.equals(highestDigest(state))) throw new IOException("Queued updater is not newer");
+        Path target = proof.observed == null ? target(state) : observedTarget(proof.observed), queued = u.home.resolve("dropin-pending/mod.jar");
         byte[] next = u.readBounded(queued, LIMIT); Updater.verify(next, SelfUpdater.hashOf(proof.asset), proof.asset.size);
         Updater.atomic(u.home.resolve("dropin-backup.jar"), u.readBounded(target, LIMIT));
         Journal journal = new Journal(); journal.before = state;
-        journal.after = decode(json(state), State.class); journal.after.build = proof.build; journal.after.highest = proof.build.sequence;
-        journal.after.owned = new SelfUpdater.Owned(state.owned.path, SelfUpdater.hashOf(proof.asset), proof.asset.size); journal.after.pending = null;
-        managed(config); mutationCheck(); Updater.atomic(u.home.resolve(JOURNAL), json(journal));
-        managed(config); mutationCheck(); Updater.atomic(target, next);
-        managed(config); mutationCheck(); save(journal.after);
-        markInstalled(u, false); Files.delete(u.home.resolve(JOURNAL)); u.clear(u.home.resolve("dropin-pending"));
+        journal.actualBefore = proof.observed == null ? state.owned : new SelfUpdater.Owned(proof.observed.path, proof.observed.sha256, proof.observed.size);
+        journal.after = decode(json(state), State.class); journal.after.build = proof.build; journal.after.highest = Math.max(state.highest, proof.build.sequence); journal.after.highestSha256 = digest;
+        journal.after.localBuild = false;
+        journal.after.owned = new SelfUpdater.Owned(journal.actualBefore.path, digest, proof.asset.size); journal.after.pending = null;
+        mutationCheck(); managed(config); verifyActual(state, proof.observed); Updater.atomic(u.home.resolve(JOURNAL), json(journal));
+        mutationCheck(); managed(config); verifyActual(state, proof.observed); Updater.atomic(target, next);
+        mutationCheck(); managed(config); Updater.verify(u.readBounded(target, LIMIT), digest, proof.asset.size); save(journal.after);
+        markInstalled(u, false); Files.delete(u.home.resolve(JOURNAL)); Files.deleteIfExists(u.home.resolve("dropin-unmanaged.json")); u.clear(u.home.resolve("dropin-pending"));
     }
     private void recover() throws Exception {
         Path path = u.home.resolve(JOURNAL); if (!Files.exists(path)) return;
-        Config config = Config.load(u.game); managed(config); mutationCheck();
+        Config config = Config.load(u.game); mutationCheck(); managed(config);
         Journal journal = read(u, path, Journal.class);
         if (journal == null || journal.before == null || journal.after == null || journal.before.owned == null || journal.after.owned == null
-            || !Objects.equals(journal.before.owned.path, journal.after.owned.path)) throw new IOException("Invalid drop-in recovery journal");
-        Path target = target(journal.before); unique(target);
+            ) throw new IOException("Invalid drop-in recovery journal");
+        SelfUpdater.Owned actualBefore = journal.actualBefore == null ? journal.before.owned : journal.actualBefore;
+        if (!Objects.equals(actualBefore.path, journal.after.owned.path)) throw new IOException("Invalid recovery path");
+        State actual = new State(); actual.owned = actualBefore; Path target = target(actual); unique(target);
         byte[] backup = u.readBounded(u.home.resolve("dropin-backup.jar"), LIMIT);
-        Updater.verify(backup, journal.before.owned.sha256, journal.before.owned.size);
+        Updater.verify(backup, actualBefore.sha256, actualBefore.size);
         String current = Updater.sha(u.readBounded(target, LIMIT));
-        if (!current.equals(journal.before.owned.sha256) && !current.equals(journal.after.owned.sha256)) throw new IOException("Local file changes block updater recovery");
-        managed(config); mutationCheck(); Updater.atomic(target, backup);
-        managed(config); mutationCheck(); save(journal.before); markInstalled(u, false); Files.delete(path);
+        if (!current.equals(actualBefore.sha256) && !current.equals(journal.after.owned.sha256)) throw new IOException("Local file changes block updater recovery");
+        mutationCheck(); managed(config);
+        current = Updater.sha(u.readBounded(target, LIMIT));
+        if (!current.equals(actualBefore.sha256) && !current.equals(journal.after.owned.sha256)) throw new IOException("Local file changes appeared during updater recovery");
+        Updater.atomic(target, backup);
+        State restored = decode(json(journal.before), State.class);
+        if (journal.after.highest > restored.highest) { restored.highest = journal.after.highest; restored.highestSha256 = highestDigest(journal.after); }
+        if (!actualBefore.path.equals(restored.owned.path) || !actualBefore.sha256.equals(restored.owned.sha256)) {
+            Unmanaged observed = new Unmanaged(); observed.path = actualBefore.path; observed.sha256 = actualBefore.sha256; observed.size = actualBefore.size;
+            observed.build = SelfUpdater.jar(backup, "companion", null); Updater.atomic(u.home.resolve("dropin-unmanaged.json"), json(observed));
+        }
+        mutationCheck(); managed(config); save(restored); markInstalled(u, false); Files.delete(path);
     }
 
     private void managed(Config expected) throws Exception {
         Config now = Config.load(u.game);
-        if (now.isLocalDevelopment(u.game) || !now.selfUpdateEnabled || !now.selfUpdateChannel.equals(expected.selfUpdateChannel)) throw new IOException("Local/disabled mode or configuration change blocks updater mutation");
-        if (state().localBuild) throw new IOException("Locally compiled updater cannot be replaced");
+        if (!now.selfUpdateEnabled || !now.selfUpdateChannel.equals(expected.selfUpdateChannel)) throw new IOException("Self-update is disabled or its channel changed");
     }
     private void mutationCheck() throws Exception {
         rejectLegacyTransaction();
@@ -327,6 +360,68 @@ public final class DropInUpdater {
         observedClockMillis = Math.max(observedClockMillis, now);
     }
     private boolean unmanaged() throws IOException { Path path = u.home.resolve("dropin-unmanaged.json"); u.safe(path); return Files.exists(path); }
+    private Unmanaged actual(State state) throws Exception {
+        if (!unmanaged()) { owned(state); return null; }
+        Unmanaged observed = read(u, u.home.resolve("dropin-unmanaged.json"), Unmanaged.class); verifyObserved(observed); return observed;
+    }
+    private Path observedTarget(Unmanaged observed) throws IOException {
+        if (observed == null) throw new IOException("Missing observed updater installation");
+        State temporary = new State(); temporary.owned = new SelfUpdater.Owned(observed.path, observed.sha256, observed.size); return target(temporary);
+    }
+    private void verifyObserved(Unmanaged observed) throws Exception {
+        Path path = observedTarget(observed); unique(path); byte[] bytes = u.readBounded(path, LIMIT); Updater.verify(bytes, observed.sha256, observed.size);
+        if (observed.build == null || !SelfUpdater.sameBuild(SelfUpdater.jar(bytes, "companion", null), observed.build)) throw new IOException("The manually installed updater changed after it was observed");
+    }
+    private void verifyActual(State state, Unmanaged observed) throws Exception { if (observed == null) owned(state); else verifyObserved(observed); }
+    private Unmanaged snapshot(Path installed, SelfUpdater.BuildInfo build) throws Exception {
+        byte[] bytes = u.readBounded(installed, LIMIT); Unmanaged snapshot = new Unmanaged(); snapshot.path = u.game.relativize(installed).toString().replace('\\', '/');
+        snapshot.sha256 = Updater.sha(bytes); snapshot.size = bytes.length; snapshot.build = build; return snapshot;
+    }
+    private static boolean sameObserved(Unmanaged a, Unmanaged b) { return a == null ? b == null : b != null && Objects.equals(a.path, b.path) && Objects.equals(a.sha256, b.sha256) && a.size == b.size && SelfUpdater.sameBuild(a.build, b.build); }
+    private static String highestDigest(State state) {
+        if (state.highestSha256 != null) return state.highestSha256;
+        return state.build != null && state.build.sequence == state.highest && state.owned != null ? state.owned.sha256 : null;
+    }
+    private State reconcileOfficial(State state, Unmanaged observed, SelfUpdater.Source source) throws Exception {
+        Config manual = new Config(); manual.selfUpdateChannel = observed.build.channel;
+        SelfUpdater.ApiRelease release = SelfUpdater.officialRelease(source, manual);
+        SelfUpdater.Asset asset = selectedAsset(release);
+        if (!asset.name.equals("folkways-updater-neoforge-1.21.1-" + observed.build.version + ".jar") || asset.size != observed.size || !SelfUpdater.hashOf(asset).equals(observed.sha256)) return null;
+        validateBuild(observed.build, asset, release, manual);
+        byte[] response = source.official(API + "/actions/runs/" + observed.build.runId, 2 * 1024 * 1024);
+        if (response.length > 2 * 1024 * 1024) throw new IOException("CI response exceeds limit");
+        verifyRun(observed.build, release, decode(response, SelfUpdater.Run.class));
+        if (!SelfUpdater.releaseFingerprint(release).equals(SelfUpdater.releaseFingerprint(SelfUpdater.officialRelease(source, manual)))) throw new IOException("Manual updater release changed during verification");
+        verifyObserved(observed);
+        String highest = highestDigest(state);
+        if (observed.build.sequence == state.highest && highest != null && !highest.equals(observed.sha256)) throw new IOException("Manual updater reuses an accepted sequence with different bytes");
+        state.highestSha256 = observed.build.sequence >= state.highest ? observed.sha256 : highest;
+        state.highest = Math.max(state.highest, observed.build.sequence); state.build = observed.build; state.localBuild = false;
+        state.owned = new SelfUpdater.Owned(observed.path, observed.sha256, observed.size); save(state); Files.deleteIfExists(u.home.resolve("dropin-unmanaged.json")); return state;
+    }
+    private void cleanCommittedPending(State state) throws Exception {
+        if (state.pending == null) return;
+        Proof proof = pending(state);
+        if (!SelfUpdater.hashOf(proof.asset).equals(state.owned.sha256) || !SelfUpdater.sameBuild(proof.build, state.build)) return;
+        state.pending = null; save(state); u.clear(u.home.resolve("dropin-pending"));
+    }
+    private boolean releaseOldHelper(HelperOwner old) throws Exception {
+        Optional<ProcessHandle> parent = ProcessHandle.of(old.parentPid);
+        if (parent.isPresent() && parent.get().isAlive() && parent.get().info().startInstant().map(i -> i.toString().equals(old.parentStart)).orElse(true)) return false;
+        // A new game lease and update.lock already exclude installation. Request voluntary exit; never kill a process.
+        Path runtime = u.game.resolve(old.runtime).normalize(); u.safe(runtime);
+        if (!Objects.equals(runtime.getParent(), u.home.resolve("dropin-runtime")) || !runtime.getFileName().toString().matches("helper-[A-Za-z0-9-]+")) throw new IOException("Invalid earlier helper runtime");
+        HelperOwner owner = read(u, runtime.resolve("owner.json"), HelperOwner.class);
+        HelperOwner intent = read(u, runtime.resolve("intent.json"), HelperOwner.class);
+        HelperOwner launched = read(u, runtime.resolve("launched.json"), HelperOwner.class);
+        if (!sameHelper(old, owner) || !sameHelper(old, launched) || intent == null || intent.parentPid != old.parentPid
+            || !Objects.equals(intent.parentStart, old.parentStart) || !Objects.equals(intent.runtime, old.runtime) || !Objects.equals(intent.token, old.token))
+            throw new IOException("Earlier helper capability does not match its runtime; leave it to finish after this game exits");
+        Updater.atomic(runtime.resolve("cancel.json"), json(old));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (alive(old) && System.nanoTime() < deadline) Thread.sleep(25);
+        return !alive(old);
+    }
     private State state() throws IOException {
         Path path = u.home.resolve(STATE); if (!Files.exists(path)) return new State();
         State result = read(u, path, State.class);
@@ -454,12 +549,13 @@ public final class DropInUpdater {
     }
     private static <T> T read(Updater u, Path path, Class<T> type) throws IOException { return decode(u.readBounded(path, 4 * 1024 * 1024), type); }
 
-    static final class State { SelfUpdater.Owned owned; SelfUpdater.BuildInfo build; boolean localBuild; long highest; String pending; }
+    static final class State { SelfUpdater.Owned owned; SelfUpdater.BuildInfo build; boolean localBuild; long highest; String highestSha256, pending; }
     static final class Unmanaged { String path, sha256; long size; SelfUpdater.BuildInfo build; }
-    static final class Proof { SelfUpdater.Asset asset; SelfUpdater.ApiRelease release; SelfUpdater.Run run; SelfUpdater.BuildInfo build; }
-    static final class Journal { State before, after; }
+    static final class Proof { SelfUpdater.Asset asset; SelfUpdater.ApiRelease release; SelfUpdater.Run run; SelfUpdater.BuildInfo build; Unmanaged observed; }
+    static final class Journal { State before, after; SelfUpdater.Owned actualBefore; }
     static final class InstallMark { long finishedMillis; boolean clockAnomaly; }
-    static final class HelperOwner { long pid, parentPid; String start, parentStart, token, runtime; }
+    static final class HelperOwner { long pid, parentPid; String start, parentStart, token, runtime; Unmanaged installed; }
+    static final class VerificationUnavailable extends IOException { VerificationUnavailable(IOException cause) { super("Official updater verification is unavailable", cause); } }
     static final class Result { boolean success; String message; long helperPid, parentPid, finishedMillis; String parentStart; }
 
     /** Hidden fat-JAR entrypoint; no remote lookup is permitted from this process. */
@@ -487,10 +583,13 @@ public final class DropInUpdater {
             try (FileChannel channel = FileChannel.open(u.home.resolve("dropin-helper.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock lock = channel.tryLock()) {
                 if (lock == null) throw new IOException("Another exit helper is active");
                 intent.pid = ProcessHandle.current().pid(); intent.start = currentStart().toString(); Updater.atomic(runtime.resolve("owner.json"), json(intent));
-                waitForExactParent(parentPid, parentStart, updater);
+                waitForExactParent(parentPid, parentStart, updater, intent, runtime);
+                cancelled(u, runtime, intent);
+                if (intent.installed != null) updater.verifyObserved(intent.installed);
                 try (FileChannel session = FileChannel.open(u.home.resolve("session.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock sessionLock = session.tryLock()) {
                     if (sessionLock == null) throw new IOException("A legacy supervisor is active; exit installation refused");
                     while (true) {
+                        cancelled(u, runtime, intent);
                         try { result.message = updater.applyOffline(); break; }
                         catch (RuntimeLease.ActiveGameException e) { Thread.sleep(200); }
                     }
@@ -503,7 +602,7 @@ public final class DropInUpdater {
             } finally { result.finishedMillis = System.currentTimeMillis(); Updater.atomic(runtime.resolve("result.json"), json(result)); }
             if (!result.success) System.exit(1);
         }
-        private static void waitForExactParent(long pid, String expected, DropInUpdater updater) throws Exception {
+        private static void waitForExactParent(long pid, String expected, DropInUpdater updater, HelperOwner intent, Path runtime) throws Exception {
             Optional<ProcessHandle> parent = ProcessHandle.of(pid);
             if (parent.isEmpty() || !parent.get().isAlive()) return;
             Optional<Instant> start = parent.get().info().startInstant();
@@ -511,10 +610,15 @@ public final class DropInUpdater {
             if (!expected.equals(start.get().toString())) return; // PID reuse proves the original parent has exited.
             var exited = parent.get().onExit();
             while (true) {
+                cancelled(updater.u, runtime, intent);
                 updater.observeClock();
                 try { exited.get(200, TimeUnit.MILLISECONDS); updater.observeClock(); return; }
                 catch (java.util.concurrent.TimeoutException e) { /* Observe clock rollback while awaiting the exact process. */ }
             }
+        }
+        private static void cancelled(Updater u, Path runtime, HelperOwner intent) throws Exception {
+            Path file = runtime.resolve("cancel.json"); u.safe(file);
+            if (Files.exists(file) && sameHelper(intent, read(u, file, HelperOwner.class))) throw new IOException("Earlier helper voluntarily cancelled before installation");
         }
     }
 }

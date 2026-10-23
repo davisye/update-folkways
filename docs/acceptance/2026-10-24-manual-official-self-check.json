@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "repository": "davisye/update-folkways",
+  "scenario": "manual installation of an official same-byte JAR under its published filename and independent self-check on an isolated copy",
+  "policy": "explicit config boolean; updater self-update independent",
+  "passed": true,
+  "environment": {
+    "platform": "Windows",
+    "java": 21,
+    "updaterVersion": "0.1.0-nightly.20.1",
+    "installedSha256": "9e7f2dca3d1fdf10a280f3a7317c08a8dbaecfefa10a15bb6dc14a6721d7e06b"
+  },
+  "checks": {
+    "legacyMarkerPresent": true,
+    "localFalseIgnoresLegacyMarker": true,
+    "sameByteOfficialReplacementReboundBeforeNetworkCheck": true,
+    "manualVerificationMarkerCleared": true,
+    "explicitLocalTrueRespected": true,
+    "officialHttpSelfCheckSucceededWhileLocalTrue": true,
+    "reportedAlreadyCurrent": true,
+    "actualUserInstallationModified": false,
+    "acceptedHighWater": 20001,
+    "ownershipMatchesActualOfficialFile": true
+  },
+  "limits": {
+    "minecraftStarted": false,
+    "exitHelperStarted": false,
+    "newVersionDownloaded": false,
+    "selfReplacementPerformed": false,
+    "differentByteManualUpgradeExercised": false
+  }
+}

@@ -17,6 +17,14 @@ if (clientUiSmokeEnabled) {
                 throw new GradleException('Refusing UI smoke in a directory containing worlds')
             }
             new File(game, 'config').mkdirs()
+            // 仅此隔离测试实例显式暂停 Folkways，IDE 自身仍需返回独立检查结果。
+            def updaterHome = new File(game, '.folkways-updater')
+            updaterHome.mkdirs()
+            def configFile = new File(updaterHome, 'config.json')
+            def smokeConfig = configFile.isFile() ? new groovy.json.JsonSlurper().parseText(configFile.getText('UTF-8')) : [:]
+            smokeConfig.localDevelopment = true
+            smokeConfig.selfUpdateEnabled = true
+            configFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(smokeConfig)) + '\n', 'UTF-8')
             new File(game, 'client-ui-smoke-owner.txt').text = 'update-folkways-client-ui-smoke-v1\n'
             new File(game, 'config/fml.toml').text = 'earlyWindowControl=false\n'
             new File(game, 'options.txt').text = 'guiScale:2\nfullscreen:false\nsoundCategory_master:0.0\nonboardAccessibility:false\nlang:zh_cn\n'

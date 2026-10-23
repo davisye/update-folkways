@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "repository": "davisye/update-folkways",
+  "scenario": "independent local-development and self-update switches in the real client configuration screen",
+  "policy": "config.localDevelopment only pauses Folkways/dependencies; selfUpdateEnabled independently controls self-updates",
+  "passed": true,
+  "environment": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.233",
+    "java": 21,
+    "platform": "Windows",
+    "artifactIdentity": "local client smoke build; not a published release"
+  },
+  "checks": {
+    "factoryRegistered": true,
+    "missingOptionalPrerequisitesDisabled": true,
+    "repositoryClicked": true,
+    "localClicked": true,
+    "saved": true,
+    "hiddenEditsPreserved": true,
+    "localModeMatchesBoolean": true,
+    "legacyMarkerIgnoredWhenDisabled": true,
+    "explicitLocalModeEnabled": true,
+    "checkButtonClickedInLocalMode": true,
+    "independentSelfCheckCompleted": true,
+    "selfCheckHasNoInstalledJarTarget": true,
+    "folkwaysCheckSkippedInLocalMode": true,
+    "factoryBackClosesToParent": true
+  },
+  "status": "本地开发：仅暂停 Folkways 与前置更新。 | 此 IDE 运行没有已安装的更新器 JAR 可替换。",
+  "visualChecks": {
+    "basicAndAdvancedScreensInspected": true,
+    "logicalWidth": 640,
+    "logicalHeight": 400,
+    "controlsInsideScreen": true
+  },
+  "limits": {
+    "networkSelfUpdateTested": false,
+    "selfUpdateInstallationTested": false,
+    "exitHelperReplacementTested": false,
+    "fullFolkwaysPackLoaded": false,
+    "officialReleaseIdentityTested": false
+  }
+}

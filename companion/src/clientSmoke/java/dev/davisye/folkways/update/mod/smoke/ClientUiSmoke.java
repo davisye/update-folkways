@@ -3,6 +3,7 @@ package dev.davisye.folkways.update.mod.smoke;
 import com.google.gson.GsonBuilder;
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.davisye.folkways.update.core.Config;
+import dev.davisye.folkways.update.mod.ClientUpdates;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,9 +55,11 @@ public final class ClientUiSmoke {
     private static String expectedRepository;
     private static boolean expectedLocal;
     private static int frameCount;
+    private static long checkDeadline;
+    private static long captureAfter;
     private static Phase phase = Phase.WAITING_FOR_TITLE;
 
-    private enum Phase { WAITING_FOR_TITLE, BASIC_CAPTURE, ADVANCED_CAPTURE, COMPLETE }
+    private enum Phase { WAITING_FOR_TITLE, REQUEST_CHECK, WAITING_FOR_CHECK, BASIC_CAPTURE, ADVANCED_CAPTURE, COMPLETE }
 
     private ClientUiSmoke() {}
 
@@ -96,6 +99,8 @@ public final class ClientUiSmoke {
         try {
             if (phase == Phase.WAITING_FOR_TITLE && mc.screen instanceof TitleScreen && mc.getOverlay() == null) {
                 openAndEdit(mc);
+            } else if (phase == Phase.REQUEST_CHECK || phase == Phase.WAITING_FOR_CHECK) {
+                awaitIndependentCheck(mc);
             }
         } catch (Exception | AssertionError error) { finish(false, error); }
     }
@@ -108,10 +113,11 @@ public final class ClientUiSmoke {
     /** 截取已完成渲染的 framebuffer；写完文件后才退出，避免异步截图丢失。 */
     @SubscribeEvent
     public static void afterFrame(RenderFrameEvent.Post event) {
-        if (!enabled || finished || phase == Phase.WAITING_FOR_TITLE) return;
+        if (!enabled || finished || (phase != Phase.BASIC_CAPTURE && phase != Phase.ADVANCED_CAPTURE)) return;
         Minecraft mc = Minecraft.getInstance();
         try {
             requireConfigScreen(mc);
+            if (System.nanoTime() < captureAfter) return;
             if (mc.getOverlay() != null || ++frameCount < 3) return;
             if (phase == Phase.BASIC_CAPTURE) {
                 RESULT.put("basicLayout", checkBounds(mc.screen));
@@ -146,8 +152,10 @@ public final class ClientUiSmoke {
                 .orElseThrow(() -> new IllegalStateException("Mods 菜单配置入口未注册"));
         RESULT.put("factoryRegistered", true);
         Config initial = Config.load(game);
+        require(initial.localDevelopment && initial.selfUpdateEnabled, "隔离实例没有显式启用 Folkways 本地模式和独立自身检查");
         expectedRepository = initial.repository.equals("IzakyL/folkways") ? "davisye/folkways" : "IzakyL/folkways";
-        expectedLocal = !initial.localDevelopment;
+        Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "legacy UI smoke marker\n", StandardCharsets.UTF_8);
+        expectedLocal = false;
         parent = mc.screen;
         Screen screen = factory.createScreen(container, parent);
         mc.setScreen(screen);
@@ -162,7 +170,15 @@ public final class ClientUiSmoke {
         RESULT.put("repositoryClicked", true);
         RESULT.put("localClicked", true);
         verifySaved();
-        phase = Phase.BASIC_CAPTURE;
+        RESULT.put("legacyMarkerIgnoredWhenDisabled", true);
+        // 在发起检查前恢复 true；整个烟测均不请求真实 Folkways 网络。
+        click(mc.screen, "local");
+        click(mc.screen, "save");
+        expectedLocal = true;
+        verifySaved();
+        RESULT.put("explicitLocalModeEnabled", true);
+        checkDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        phase = Phase.REQUEST_CHECK;
         frameCount = 0;
     }
 
@@ -172,10 +188,37 @@ public final class ClientUiSmoke {
         require(saved.localDevelopment == expectedLocal, "本地开发按钮没有保存到共享配置");
         require(saved.restartLimit == 17 && saved.restartCooldownSeconds == 23, "保存覆盖了外部编辑的隐藏字段");
         require(Files.isRegularFile(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"))
-                && saved.isLocalDevelopment(game), "界面编辑绕过了 IDE 本地构建保护");
+                && saved.isLocalDevelopment(game) == expectedLocal, "旧标记覆盖了显式本地模式开关");
         RESULT.put("saved", true);
         RESULT.put("hiddenEditsPreserved", true);
-        RESULT.put("ideProtectionRetained", true);
+        RESULT.put("localModeMatchesBoolean", true);
+    }
+
+    private static void awaitIndependentCheck(Minecraft mc) throws Exception {
+        requireConfigScreen(mc);
+        require(Config.load(game).isLocalDevelopment(game), "验收检查前 Folkways 本地模式被关闭");
+        require(System.nanoTime() < checkDeadline, "本地模式中的独立自身检查未在五秒内完成");
+        if (phase == Phase.REQUEST_CHECK) {
+            if (ClientUpdates.checking() || !button(mc.screen, "check").active) return;
+            click(mc.screen, "check");
+            // 等待“请求已提交”的四秒反馈消失，让截图包含独立检查结果。
+            captureAfter = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(4200);
+            RESULT.put("checkButtonClickedInLocalMode", true);
+            phase = Phase.WAITING_FOR_CHECK;
+            return;
+        }
+        if (ClientUpdates.checking()) return;
+        String status = ClientUpdates.status().getString();
+        String local = Component.translatable("folkways_updater.status.local").getString();
+        String noTarget = Component.translatable("folkways_updater.status.self_no_target").getString();
+        require(status.contains(local) && status.contains(noTarget) && !status.equals(local),
+                "本地模式没有分别返回 Folkways 暂停与 IDE 无自身 JAR 目标");
+        RESULT.put("independentSelfCheckCompleted", true);
+        RESULT.put("selfCheckHasNoInstalledJarTarget", true);
+        RESULT.put("folkwaysCheckSkippedInLocalMode", true);
+        RESULT.put("checkStatus", status);
+        phase = Phase.BASIC_CAPTURE;
+        frameCount = 0;
     }
 
     private static void requireConfigScreen(Minecraft mc) {

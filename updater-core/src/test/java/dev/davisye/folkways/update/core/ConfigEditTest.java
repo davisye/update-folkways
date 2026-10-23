@@ -34,7 +34,7 @@ class ConfigEditTest {
         assertArrayEquals(before, Files.readAllBytes(file));
         assertFalse(Files.exists(file.resolveSibling("config.json.tmp")));
     }
-    @Test void localProtectionCanBeSavedDuringDownloadAndCannotEraseEnvironmentMarker() throws Exception {
+    @Test void localModeCanBeChangedDuringDownloadAndLegacyMarkersDoNotOverrideItsSwitch() throws Exception {
         Updater.initialize(game);
         Config.edit(game, c -> c.localDevelopment = false);
         Path home = game.resolve(".folkways-updater");
@@ -45,7 +45,21 @@ class ConfigEditTest {
         }
         Files.writeString(home.resolve("LOCAL_DEVELOPMENT"), "explicit developer protection");
         Config.edit(game, c -> c.localDevelopment = false);
-        assertTrue(Config.load(game).isLocalDevelopment(game));
+        assertFalse(Config.load(game).isLocalDevelopment(game));
         assertTrue(Files.exists(home.resolve("LOCAL_DEVELOPMENT")));
     }
+    @Test void legacyJvmFlagCannotSilentlyEnableLocalMode() throws Exception {
+        Updater.initialize(game);
+        String previous = System.getProperty("folkways.localDevelopment");
+        try {
+            System.setProperty("folkways.localDevelopment", "true");
+            assertFalse(Config.load(game).isLocalDevelopment(game));
+            Config.edit(game, c -> c.localDevelopment = true);
+            assertTrue(Config.load(game).isLocalDevelopment(game));
+        } finally {
+            if (previous == null) System.clearProperty("folkways.localDevelopment");
+            else System.setProperty("folkways.localDevelopment", previous);
+        }
+    }
+
 }

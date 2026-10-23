@@ -49,7 +49,7 @@ public final class SelfUpdater {
         State s = state(); Config config = Config.load(u.game);
         return "self-source=" + REPOSITORY + ", channel=" + config.selfUpdateChannel + ", version=" + (s.version == null ? "unadopted" : s.version)
             + ", pending=" + Files.exists(u.home.resolve("self-pending/metadata.json"))
-            + ", local=" + (config.isLocalDevelopment(u.game) || s.localBuild);
+            + ", enabled=" + config.selfUpdateEnabled;
     }
     /** Initial trust is explicit: the seed names an existing companion file and never adopts replacements later. */
     public String adopt(Path companion) throws Exception {
@@ -69,21 +69,19 @@ public final class SelfUpdater {
                 first = info;
                 state.version = info.version;
                 state.localBuild |= !publishedBuild(info);
-                state.highest = Math.max(state.highest, info.sequence);
+                if (publishedBuild(info)) state.highest = Math.max(state.highest, info.sequence);
                 state.owned.put(component, new Owned(u.game.relativize(path).toString().replace('\\', '/'), Updater.sha(data), data.length));
             }
-            save(state); return "Updater ownership recorded; local-build protection=" + state.localBuild;
+            save(state); return "Updater ownership recorded; self-update uses its independent enable setting";
         });
     }
     public String checkAndStage() throws Exception {
         Config config = Config.load(u.game);
-        if (config.isLocalDevelopment(u.game)) return "Local development: updater self-update disabled";
         if (!config.selfUpdateEnabled) return "Updater self-update disabled";
         return u.locked(() -> {
             requireManaged(config);
             State state = state();
             if (state.owned.isEmpty()) return "Updater self-update requires the stable launch seed and explicit initial ownership";
-            if (state.localBuild) return "Locally compiled updater: self-replacement disabled";
             owned(state);
             if (Files.exists(u.home.resolve("self-journal.json"))) throw new IOException("Updater transaction requires stable-seed recovery");
             Source source = source(config);
@@ -132,9 +130,9 @@ public final class SelfUpdater {
             if (lock == null) throw new IOException("Game supervisor is active; updater replacement refused");
             Bootstrap.guardPreviousChild(u);
             RuntimeLease.ensureNoGame(u);
-            if (config.isLocalDevelopment(u.game) || !config.selfUpdateEnabled) {
-                if (Files.exists(u.home.resolve("self-journal.json"))) throw new IOException("Local/disabled mode blocks an interrupted updater transaction");
-                return "Local or disabled mode: updater files retained";
+            if (!config.selfUpdateEnabled) {
+                if (Files.exists(u.home.resolve("self-journal.json"))) throw new IOException("Disabled self-update blocks an interrupted updater transaction");
+                return "Self-update disabled: updater files retained";
             }
             separateRuntime(state());
             u.locked(() -> { recover(config); return null; });
@@ -175,7 +173,7 @@ public final class SelfUpdater {
             }
             save(after); Files.delete(u.home.resolve("self-journal.json")); u.clear(pending);
         } catch (Exception e) {
-            if (!Config.load(u.game).isLocalDevelopment(u.game)) recover(config);
+            recover(config);
             throw e;
         }
         return "Updater installed before JVM launch: " + metadata.version;
@@ -214,7 +212,7 @@ public final class SelfUpdater {
     private static boolean sameFile(Path left, Path right) throws IOException { return left.equals(right) || (Files.exists(left) && Files.exists(right) && Files.isSameFile(left, right)); }
     private void requireManaged(Config expected) throws IOException {
         Config now = Config.load(u.game);
-        if (now.isLocalDevelopment(u.game) || !now.selfUpdateEnabled) throw new IOException("Local/disabled mode blocks updater changes");
+        if (!now.selfUpdateEnabled) throw new IOException("Self-update is disabled");
         if (!now.selfUpdateChannel.equals(expected.selfUpdateChannel)) throw new IOException("Updater channel changed during download");
     }
     private Path target(String component, Owned owned) throws IOException {
