@@ -184,6 +184,25 @@ public final class AutomaticRestart {
                 if (!bareJava && !Files.isSameFile(Path.of(original), executable)) throw new IOException("Java executable identity mismatch");
                 command.addAll(parsed.subList(1, parsed.size()));
             } finally { if (query.isAlive()) query.destroyForcibly(); }
+        } else if (System.getProperty("os.name").equals("Linux")) {
+            // OpenJDK's process snapshot can omit arguments when the native read buffer is too small.
+            // procfs preserves NUL boundaries, including empty arguments, without reconstructing a shell command.
+            byte[] raw;
+            try (var input = Files.newInputStream(Path.of("/proc/self/cmdline"))) { raw = input.readNBytes(128 * 1024 + 1); }
+            if (raw.length == 0 || raw.length > 128 * 1024 || raw[raw.length - 1] != 0) throw new IOException("Linux command line unavailable or too large");
+            List<String> parsed = new ArrayList<>(); int offset = 0;
+            var charset = java.nio.charset.Charset.forName(System.getProperty("sun.jnu.encoding", StandardCharsets.UTF_8.name()));
+            for (int i = 0; i < raw.length; i++) if (raw[i] == 0) {
+                parsed.add(charset.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                        .decode(java.nio.ByteBuffer.wrap(raw, offset, i - offset)).toString());
+                offset = i + 1;
+            }
+            if (parsed.size() < 2) throw new IOException("Linux Java arguments unavailable");
+            String original = parsed.getFirst();
+            if (!Set.of("java", "java.exe").contains(original) && !Files.isSameFile(Path.of(original), executable))
+                throw new IOException("Linux Java executable identity mismatch");
+            command.addAll(parsed.subList(1, parsed.size()));
         } else command.addAll(Arrays.asList(info.arguments().orElseThrow(() -> new IOException("Java arguments unavailable"))));
         if (command.size() < 2) throw new IOException("Java launch arguments unavailable");
         return List.copyOf(command);
