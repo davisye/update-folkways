@@ -19,8 +19,8 @@
   "folkways_updater.config.commands_help": "启用权限等级 4 的 /restart 与 /shutdown。客户端不支持完整重启；独立服务器先保存，再由辅助进程重启。",
   "folkways_updater.config.more": "更多设置…",
   "folkways_updater.config.module": "%s %s",
-  "folkways_updater.config.module_help": "可选扩展；需要 %s，预下载前校验版本兼容性。",
-  "folkways_updater.config.module_missing": "请先安装 %s，再启用此扩展。",
+  "folkways_updater.config.module_help": "可选扩展，需要 %s。已有兼容前置会复用；版本冲突会提示，不覆盖手动文件。",
+  "folkways_updater.config.module_missing": "勾选后将一并预下载缺失的 %s 及必要依赖；完全退出游戏后一起安装。",
   "folkways_updater.config.poll": "轮询间隔：%s 秒",
   "folkways_updater.config.self_channel": "更新器频道：%s",
   "folkways_updater.config.region": "地域偏好：%s",
@@ -57,5 +57,6 @@
   "folkways_updater.config.self_help": "控制更新器自身的更新，独立于本地开发开关。开启本地开发时也照常自更新。",
   "folkways_updater.status.self_no_target": "此 IDE 运行没有已安装的更新器 JAR 可替换。",
   "folkways_updater.status.self_verification_unavailable": "更新器官方校验暂不可用，已保留当前版本；Folkways 按其配置继续检查。",
-  "folkways_updater.status.settings_changed": "设置已生效；Folkways 与更新器自身将按各自开关检查。"
+  "folkways_updater.status.settings_changed": "设置已生效；Folkways 与更新器自身将按各自开关检查。",
+  "folkways_updater.status.dependency_conflict": "前置 %s 版本冲突：当前 %s，需要 %s。已保留文件，请先处理冲突再检查。"
 }

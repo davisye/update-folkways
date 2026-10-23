@@ -12,7 +12,7 @@
 
 国内下载可在官方 Release 确认完整 JAR 名称后，使用 `https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<完整JAR文件名>`。首次下载属于人工信任步骤；运行时不能用镜像自己的摘要代替官方 API 与 CI 身份验证。
 
-本项目不代装 Minecraft、NeoForge 或可选扩展的大型前置 Mod。空实例的默认基础安装包含同次发布的 Folkways Core、Vanilla，以及缺失的 LDLib2 2.2.37-all。Ponder、Flywheel、Starlark 已由上游内嵌，无需重复安装。
+本项目不代装 Minecraft 或 NeoForge。空实例的默认基础安装包含同次发布的 Folkways Core、Vanilla，以及缺失的 LDLib2 2.2.37-all。Ponder、Flywheel、Starlark 已由上游内嵌，无需重复安装。
 
 ## 第一次运行会发生什么
 
@@ -34,7 +34,7 @@ Folkways 的 `manifestUrl` 留空时使用所选仓库官方 GitHub Release：�
 
 只有运营方实际提供可信签名清单时才填写 `manifestUrl` 和 `publicKeys`，这会选择独立的 Ed25519 通道。公共自动签名发布仍延期；不要填写陌生密钥来绕过校验。
 
-Create、Modular Golems 和 Cookery 扩展需要已有兼容前置。缺少前置或版本不满足时，应先按提示安装对应 Mod，再选择扩展；更新器不会擅自替换这些前置包。
+Create、Modular Golems 和 Cookery 扩展可以在缺少前置时直接勾选。保存并检查会将选中模块、缺失的官方前置及必要的间接依赖作为一批预下载，游戏完全退出后一起安装。已有兼容前置会复用；已有版本不兼容时提示冲突并保留，不静默覆盖。取消扩展不会自动卸载已经安装的前置。见 [前置安装规则](dependencies.md)。
 
 ## 退出、重开与失败
 

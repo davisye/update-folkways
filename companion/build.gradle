@@ -24,6 +24,7 @@ if (clientUiSmokeEnabled) {
             def smokeConfig = configFile.isFile() ? new groovy.json.JsonSlurper().parseText(configFile.getText('UTF-8')) : [:]
             smokeConfig.localDevelopment = true
             smokeConfig.selfUpdateEnabled = true
+            smokeConfig.modules = ['core', 'vanilla']
             configFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(smokeConfig)) + '\n', 'UTF-8')
             new File(game, 'client-ui-smoke-owner.txt').text = 'update-folkways-client-ui-smoke-v1\n'
             new File(game, 'config/fml.toml').text = 'earlyWindowControl=false\n'

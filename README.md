@@ -30,7 +30,7 @@
 2. 从 [Releases](https://github.com/davisye/update-folkways/releases) 下载 **`folkways-updater-neoforge-1.21.1-<version>.jar`**，放进实例 `mods/`。只保留一份 updater。
 3. 照常启动。空实例默认检查并预下载 Folkways **Core、Vanilla 和缺失的 LDLib2**；正常退出整个游戏，等待后台 helper 安装，再次启动后加载。
 
-更新 helper 已包含在 Mod 内，会自动释放到实例的 `.folkways-updater/`。不必更换启动器或复制额外脚本。Minecraft、NeoForge 仍需先安装；Create、Modular Golems、Cookery 的前置 Mod 不在自动代装范围。
+更新 helper 已包含在 Mod 内，会自动释放到实例的 `.folkways-updater/`。不必更换启动器或复制额外脚本。Minecraft、NeoForge 仍需先安装；在配置页勾选 Create、Modular Golems、Cookery 后，会一并预下载缺失的官方前置及必要依赖。
 
 在 NeoForge **Mods → Folkways Development Updater → 配置** 中选择源、渠道和模块，或开启本地开发保护。点击检查会先保存，再后台检查；主菜单也能看到状态与下载提示，不必先进入世界。
 
@@ -78,11 +78,11 @@ flowchart TD
 | Folkways 默认来源 | 可选 `IzakyL/folkways` 或 `davisye/folkways`；核对官方 Release 资产摘要、固定提交和对应成功发布 CI，无需填写密钥 |
 | Folkways 可选签名来源 | 配置非空 `manifestUrl` 与可信 Ed25519 公钥后使用；公共自动签名发布尚未启用 |
 
-Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一次更新来自同一构建。基础安装需要的外置库是 LDLib2；Ponder、Flywheel 和 Starlark 已由上游 JAR 内嵌，不重复安装。可选扩展要求先装兼容前置，缺失时会拒绝准备对应安装。
+Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一次更新来自同一构建。基础安装需要的外置库是 LDLib2；选择可选扩展时，会补齐缺失的 Create、Modular Golems、Kaleidoscope Cookery，以及必要的 L2Library。Ponder、Flywheel、Starlark 等内嵌库不重复安装。已有兼容前置只读复用，版本冲突时提示并保留原文件。具体固定版本和官方来源见 [前置安装规则](docs/dependencies.md)。
 
 `manifestUrl` 留空即使用官方 GitHub 来源，不表示关闭 Folkways 更新。首次自动安装只接管没有 Folkways 的空集合；已有手动或本地编译的 Folkways JAR 不被静默接管。release、rc、beta、alpha、nightly 是可选渠道，当前两源实际只有 nightly；没有符合条件的发行时保留当前文件。
 
-网络新配置默认 `mirror-first`，GitHub 下载与 [github.davisye.cn](https://github.davisye.cn/) 可故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。可信元信息来自官方 API；不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
+网络新配置默认 `mirror-first`，GitHub 下载与 [github.davisye.cn](https://github.davisye.cn/) 可故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。Windows 建连失败时可回退到已启用的静态系统 HTTP 代理，无需额外启动参数。可信元信息来自官方 API；不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
 
 [OpenList](https://pan.davisye.cn/) 可展示 Folkways 发布链接。nightly 只保留最新一套，其他渠道按版本归档；外链目录不等于持久二进制存储。发布工具和存储边界见 [发布镜像指南](docs/publishing.md)。
 
@@ -123,6 +123,6 @@ Windows/Linux [CI](https://github.com/davisye/update-folkways/actions/workflows/
 
 Drop one updater JAR into `mods/` and launch NeoForge 1.21.1 normally. The mod checks and stages downloads, then an embedded helper waits for the entire game JVM to exit before installing. The next launch loads the installed version; this does not guarantee the newest release before every startup scan.
 
-The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. Only `config.localDevelopment` pauses Folkways and dependency updates. Updater self-updates use the independent `selfUpdateEnabled` switch and continue in local-development mode. IDEs, source identity, environment variables, JVM flags, and legacy marker files do not enable that mode. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
+The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. Optional Create, Modular Golems and Cookery integrations can be selected before their prerequisites are installed: missing audited prerequisites and required transitive dependencies are staged together. Compatible existing files are reused; conflicting manual files are retained. Only `config.localDevelopment` pauses Folkways and dependency updates. Updater self-updates use the independent `selfUpdateEnabled` switch and continue in local-development mode. IDEs, source identity, environment variables, JVM flags, and legacy marker files do not enable that mode. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
 
 See [installation](docs/installation.md), [configuration](docs/configuration.md), and [verification limits](docs/verification.md). Drop-in restart was tested on an isolated NeoForge dedicated server with only this mod; a full Folkways pack, human players, and the Minecraft client were not tested. Full client restart remains unsupported.

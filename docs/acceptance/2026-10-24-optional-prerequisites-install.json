@@ -1,0 +1,184 @@
+{
+  "schema": 1,
+  "date": "2026-10-24",
+  "repository": "davisye/update-folkways",
+  "scenario": "all optional integrations and their missing prerequisites from empty mods through real HTTPS staging, offline installation, current recheck and NeoForge dedicated startup",
+  "passed": true,
+  "artifactIdentity": "local development candidate; formal updater publication checked separately",
+  "network": {
+    "schema": 1,
+    "date": "2026-10-24",
+    "repository": "IzakyL/folkways",
+    "passed": true,
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.233",
+    "platform": "Windows",
+    "java": 21,
+    "runtime": "default Java; no proxy system properties",
+    "realOfficialApiAndTransportUsed": true,
+    "allModulesSelected": true,
+    "noModFilesWrittenDuringStage": true,
+    "completeFileCount": 10,
+    "files": [
+      {
+        "id": "folkways_core",
+        "name": "folkways-core-neoforge-1.21.1-0.1.0.jar",
+        "sha256": "86bd21b1279acfb7bd3c5facadcac6ab0a26ea792d2eb1001a81a3702665eb46",
+        "size": 3617681,
+        "version": "0.1.0"
+      },
+      {
+        "id": "folkways_vanilla",
+        "name": "folkways-vanilla-neoforge-1.21.1-0.1.0.jar",
+        "sha256": "87aff10a753a0f4ade312deb12cc5cfdc950efb30a46beb9a07a4c7cf9a058dd",
+        "size": 1829259,
+        "version": "0.1.0"
+      },
+      {
+        "id": "folkways_create",
+        "name": "folkways-create-neoforge-1.21.1-0.1.0.jar",
+        "sha256": "f3c206412e009676aa2a5759adffe9c11805d6a936924dad5cfdbf19da79ddd3",
+        "size": 318849,
+        "version": "0.1.0"
+      },
+      {
+        "id": "folkways_modulargolems",
+        "name": "folkways-modulargolems-neoforge-1.21.1-0.1.0.jar",
+        "sha256": "a0360ff20d5576ef65b31d2afaa373851343f561d14ff380924c84fb79b49b76",
+        "size": 30623,
+        "version": "0.1.0"
+      },
+      {
+        "id": "folkways_cookery",
+        "name": "folkways-cookery-neoforge-1.21.1-0.1.0.jar",
+        "sha256": "ab52dfdf7f09c1a04ce9d4a44223896aa98030c336a308ea5cb1338d2dbe0174",
+        "size": 574327,
+        "version": "0.1.0"
+      },
+      {
+        "id": "ldlib2",
+        "name": "ldlib2-neoforge-1.21.1-2.2.37-all.jar",
+        "sha256": "a3848cb43242c5367b984142e520ff8f4324ff67945b728e2a2b606846fc9484",
+        "size": 7215985,
+        "version": "2.2.37"
+      },
+      {
+        "id": "create",
+        "name": "create-1.21.1-6.0.10.jar",
+        "sha256": "ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a",
+        "size": 19123767,
+        "version": "6.0.10"
+      },
+      {
+        "id": "modulargolems",
+        "name": "modulargolems-3.1.44.jar",
+        "sha256": "41c487cc9002be1e80ceb46d6b6e1d50ecadba2430aa598eb5b924ff8385caf0",
+        "size": 3685087,
+        "version": "3.1.44"
+      },
+      {
+        "id": "kaleidoscope_cookery",
+        "name": "kaleidoscopecookery-1.6.0-neoforge+mc1.21.1.jar",
+        "sha256": "e93784a3f17e546ebfa7c449572933bf67c6b694c01cb26b83ad120c40452b33",
+        "size": 3496661,
+        "version": "1.6.0-neoforge+mc1.21.1"
+      },
+      {
+        "id": "l2library",
+        "name": "l2library-3.0.9.jar",
+        "sha256": "6499f64bfd1c27a2d4bc62eb1144104d4e50a6c69d60ac2717ef5a30951808d8",
+        "size": 982934,
+        "version": "3.0.9"
+      }
+    ],
+    "officialFolkwaysCommit": "7ca87b9cbfd479587871988fc3a7ff8bf056e8dc",
+    "officialFolkwaysSequence": 106001,
+    "actualDownloadRouteInstrumented": false,
+    "scope": "real official HTTPS API and asset paths; Windows system proxy compatibility available, exact runtime route not separately instrumented"
+  },
+  "offlineInstallation": {
+    "newJavaProcess": true,
+    "installedFileCount": 10,
+    "allHashesMatchStagedProof": true,
+    "ownershipFileCount": 10,
+    "pendingAndJournalCleared": true,
+    "officialCurrentRecheckPassed": true
+  },
+  "loader": {
+    "passed": true,
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.233",
+    "platform": "Windows",
+    "java": 21,
+    "artifactIdentity": "local development candidate; not a public updater release",
+    "folkwaysRepository": "IzakyL/folkways",
+    "allFiveModulesAndPrerequisites": true,
+    "installedModFiles": [
+      "create-1.21.1-6.0.10.jar",
+      "folkways-cookery-neoforge-1.21.1-0.1.0.jar",
+      "folkways-core-neoforge-1.21.1-0.1.0.jar",
+      "folkways-create-neoforge-1.21.1-0.1.0.jar",
+      "folkways-modulargolems-neoforge-1.21.1-0.1.0.jar",
+      "folkways-updater-neoforge-1.21.1-0.1.0-dev.jar",
+      "folkways-vanilla-neoforge-1.21.1-0.1.0.jar",
+      "kaleidoscopecookery-1.6.0-neoforge+mc1.21.1.jar",
+      "l2library-3.0.9.jar",
+      "ldlib2-neoforge-1.21.1-2.2.37-all.jar",
+      "modulargolems-3.1.44.jar"
+    ],
+    "reachedDedicatedReady": true,
+    "normalExitCode": 0,
+    "worldSaved": true,
+    "modHashesUnchanged": true,
+    "folkwaysPollingPausedDuringLoaderTest": true,
+    "selfUpdateEnabledDuringLoaderTest": false,
+    "clientStarted": false,
+    "realPlayersJoined": false,
+    "allGameplayMechanicsTested": false,
+    "loadedVersions": {
+      "create": "6.0.10",
+      "modulargolems": "3.1.44",
+      "l2library": "3.0.9",
+      "kaleidoscope_cookery": "1.6.0-neoforge+mc1.21.1",
+      "ldlib2": "2.2.37",
+      "l2itemselector": "3.1.6",
+      "l2tabs": "3.0.6+7"
+    },
+    "nonFatalUpstreamResourceErrors": [
+      "Modular Golems guide loot refers to optional Patchouli book while Patchouli is not installed",
+      "Cookery optional Quark compatibility entries are missing from carryon:block_blacklist and kaleidoscope_cookery:cookery_mod_items tags"
+    ],
+    "cleanResourceLogClaimed": false
+  },
+  "validation": {
+    "fullJavaBeforeFinalDeadlineConstant": {
+      "tests": 134,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "networkCasesRecheckedAfterDeadlineAdjustment": 17,
+    "productionWindowsProxyDeadlineSeconds": 5
+  },
+  "limits": {
+    "actualUserGameModified": false,
+    "fullPackClientStarted": false,
+    "realPlayersJoined": false,
+    "allGameplayMechanicsTested": false,
+    "runtimeNetworkRouteInstrumented": false,
+    "offlineInstallInThisScenarioUsedUpdaterApiNotExitHelper": true
+  },
+  "actualExitHelper": {
+    "passed": true,
+    "platform": "Windows",
+    "java": 21,
+    "actualEmbeddedPostExitHelper": true,
+    "allTenFolkwaysAndPrerequisiteFilesInstalled": true,
+    "configBytesUnchanged": true,
+    "updaterJarUnchangedWithSelfUpdateDisabled": true,
+    "pendingAndJournalCleared": true,
+    "nextStartupAcceptedAndCleanedOldRuntime": true,
+    "retainedHelperGenerations": 1,
+    "scope": "offline copied real official queue and bytes from the independently verified network stage; not a second network download and no Minecraft in this helper scenario"
+  }
+}

@@ -153,6 +153,7 @@ public final class ClientUiSmoke {
         RESULT.put("factoryRegistered", true);
         Config initial = Config.load(game);
         require(initial.localDevelopment && initial.selfUpdateEnabled, "隔离实例没有显式启用 Folkways 本地模式和独立自身检查");
+        require(initial.modules.equals(List.of("core", "vanilla")), "界面首装验收必须从两个基础模块开始");
         expectedRepository = initial.repository.equals("IzakyL/folkways") ? "davisye/folkways" : "IzakyL/folkways";
         Files.writeString(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"), "legacy UI smoke marker\n", StandardCharsets.UTF_8);
         expectedLocal = false;
@@ -162,6 +163,12 @@ public final class ClientUiSmoke {
         requireConfigScreen(mc);
         checkBounds(screen);
         requireOptionalControls(screen);
+        // 缺少三个前置时仍能实际点击，并将三项扩展一起保存。
+        for (int index = 0; index < 3; index++) optionalButton(mc.screen, index).onPress();
+        // 取消后重选第一项，验证两方向的实际交互，最终仍全选。
+        optionalButton(mc.screen, 0).onPress();
+        optionalButton(mc.screen, 0).onPress();
+        RESULT.put("allMissingPrerequisiteModulesClicked", true);
         // 模拟用户开着旧草稿时，其他工具修改了不在此界面编辑的字段。
         Config.edit(game, latest -> { latest.restartLimit = 17; latest.restartCooldownSeconds = 23; });
         click(screen, "repository");
@@ -186,6 +193,9 @@ public final class ClientUiSmoke {
         Config saved = Config.load(game);
         require(expectedRepository.equals(saved.repository), "仓库按钮没有保存到共享配置");
         require(saved.localDevelopment == expectedLocal, "本地开发按钮没有保存到共享配置");
+        require(new java.util.HashSet<>(saved.modules).equals(Set.of("core", "vanilla", "create", "modulargolems", "cookery")),
+                "缺少前置时三个可选扩展没有全部保存");
+        RESULT.put("allOptionalModulesSavedWithoutPrerequisites", true);
         require(saved.restartLimit == 17 && saved.restartCooldownSeconds == 23, "保存覆盖了外部编辑的隐藏字段");
         require(Files.isRegularFile(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"))
                 && saved.isLocalDevelopment(game) == expectedLocal, "旧标记覆盖了显式本地模式开关");
@@ -280,14 +290,24 @@ public final class ClientUiSmoke {
         return Map.of("width", screen.width, "height", screen.height, "visibleWidgets", bounds);
     }
 
+    private static AbstractButton optionalButton(Screen screen, int index) {
+        List<AbstractButton> controls = widgets(screen).stream()
+                .filter(AbstractButton.class::isInstance).map(AbstractButton.class::cast)
+                .filter(widget -> containsKey(widget.getMessage(), PREFIX + "module")).toList();
+        require(controls.size() == 3 && index >= 0 && index < controls.size(), "可选扩展按钮缺失");
+        AbstractButton control = controls.get(index);
+        require(control.active && control.visible, "缺少前置时不能勾选扩展");
+        return control;
+    }
+
     private static void requireOptionalControls(Screen screen) {
         List<AbstractWidget> controls = widgets(screen).stream()
                 .filter(widget -> containsKey(widget.getMessage(), PREFIX + "module")).toList();
         require(controls.size() == 3, "基础页没有三个可选扩展控件");
-        for (AbstractWidget control : controls) require(control.visible && !control.active, "缺少前置的扩展应保持可见且禁用");
+        for (AbstractWidget control : controls) require(control.visible && control.active, "缺少前置的扩展仍应允许选择自动安装");
         require(!ModList.get().isLoaded("create") && !ModList.get().isLoaded("modulargolems")
                 && !ModList.get().isLoaded("kaleidoscope_cookery"), "验收实例意外带入了可选扩展前置");
-        RESULT.put("missingOptionalPrerequisitesDisabled", true);
+        RESULT.put("missingOptionalPrerequisitesSelectable", true);
     }
 
     private static void capture(Minecraft mc, String fileName) throws Exception {

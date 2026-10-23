@@ -113,7 +113,7 @@ public final class UpdaterConfigScreen extends Screen {
             if (draft.modules.contains(module)) draft.modules.remove(module); else draft.modules.add(module);
             changed();
         }, selected ? "+" : "-", label);
-        control.active = selected || installed;
+        control.active = readable;
         control.setTooltip(Tooltip.create(t(installed ? "module_help" : "module_missing", requirement)));
     }
 

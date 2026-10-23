@@ -4,13 +4,24 @@
 
 2026-10-24 起，本地开发仅由配置值控制、仅暂停 Folkways/依赖；自身更新独立。下文 2026-10-23 的验收与机器记录保持原始事实，适用此前的旧 policy，包括 IDE 标记生效、本地模式阻止自身替换等行为，不能据此推断新开关语义。[验收索引](acceptance/README.md) 说明适用范围。
 
+## 可选扩展与自动前置验收
+
+当前实现允许空实例直接选择三项扩展，按固定官方 Modrinth 目录准备必要依赖。[前置规则](dependencies.md) 记录固定版本和复用/冲突边界。
+
+- 真实隔离 NeoForge 客户端中未安装三个主前置，仍能点击全选、取消后重选并保存；独立本地/自更新开关和隐藏字段保留继续通过。[界面记录](acceptance/2026-10-24-optional-prerequisites-client.json)。
+- 默认 Java 21 无额外代理参数，使用正式 HTTPS API/Transport 从空 mods 预下载五个 Folkways 模块和五个库；每个摘要匹配。独立 JVM 离线安装后十份归属/摘要一致，pending/journal 清理，正式网络复查返回已是当前版本。该离线安装调用 Updater API，不能称为此场景实际退出 helper 安装。
+- 另一个空白隔离实例只放当前候选 updater JAR，使用前项真实网络验证后复制的完整队列；实际内嵌 helper 在父 JVM 退出后安装十份文件，摘要和配置保持，下次探针接受已安装版本并只保留一代 helper。这项是离线真实辅助进程验收，不是第二次网络下载或 Minecraft 运行。
+- 同一套文件在真实 NeoForge 21.1.233 专服加载，达到 Done、保存新世界并正常退出，十个已装文件和本地候选 updater 摘要未变。实测选中 L2ItemSelector 3.1.6、L2Tabs 3.0.6+7，与 JarJar 区间推导一致。[安装与加载记录](acceptance/2026-10-24-optional-prerequisites-install.json)。
+- 该专服仍有上游非致命资源错误：未安装可选 Patchouli 时的 MG 指南 loot，以及 Cookery/Quark 兼容项的 tag 引用；没有据此自动安装未声明为必需的可选 Mod，也不把启动成功等同于全部玩法无误。未测试完整模组包客户端、真实玩家和全部存档玩法。
+- 本地完整构建 Java 134 项，133 通过、1 项本机卷能力跳过；将系统代理查询总期限从 2 秒调至 5 秒后，17 项相关测试和最终打包再次通过。独立审阅另验证真实十 JAR/66 条必需依赖、固定 pin 篡改拒绝及默认 Java 完整下载。公开发行仍以最终提交的两平台 CI 和发布包身份为准。
+
 ## 本次开关契约验收
 
-本次针对独立开关、旧 IDE/JVM/env/marker 不覆盖配置、updater 同摘要改名、官方手动升级的来源核验、实际文件快照、自身校验暂不可用不阻断 Folkways，以及完整事务/进程门禁做了定向验证。下列结果来自本地工作树，尚未代表本轮公开 CI 或发行通过。
+本次针对独立开关、旧 IDE/JVM/env/marker 不覆盖配置、updater 同摘要改名、官方手动升级的来源核验、实际文件快照、自身校验暂不可用不阻断 Folkways，以及完整事务/进程门禁做了定向验证。下列本地实验保留原始范围；随后 [28.1 主分支 CI](https://github.com/davisye/update-folkways/actions/runs/39991401019) 已通过公开门禁，Windows Java 105 项通过、Linux 103 项通过/2 项平台专用跳过，两端 Python 64 项通过，公开单 JAR 的国内镜像摘要一致。
 
 当前已在真实隔离 NeoForge 21.1.233 / Java 21 Windows 客户端验证配置页：旧开发标记不覆盖关闭状态，主动打开按钮后配置为 true；local=true 仍能按检查按钮并完成独立自身检查，Folkways 检查暂停。因为该场景为 IDE 运行，自身状态明确显示“没有已安装的更新器 JAR 可替换”，不能把这次通过当作已完成自身下载或安装。高级字段保存保留、基础/高级两页布局、返回原页面通过，截图已检查。[当前界面机器记录](acceptance/2026-10-24-independent-client-configuration.json) 保留事实与边界。
 
-本轮本地完整构建及客户端验收源码编译成功；该全量轮次 Java 104 项，103 通过、1 项因本机测试卷不提供 8.3 别名跳过。随后新增的 local=true 自身离线恢复用例单独运行通过：恢复原 JAR、保留已接受的更高序号/摘要、清理自身 journal，Folkways 本地文件与队列哨兵不变。当前源码共有 105 项，本轮公开 CI 的 105 项全量结果尚待确认。Python 发布测试 59 项通过。
+本轮本地完整构建及客户端验收源码编译成功；该全量轮次 Java 104 项，103 通过、1 项因本机测试卷不提供 8.3 别名跳过。随后新增的 local=true 自身离线恢复用例单独运行通过：恢复原 JAR、保留已接受的更高序号/摘要、清理自身 journal，Folkways 本地文件与队列哨兵不变。该轮源码共有 105 项，随后公开 CI 结果见上文；当时本地 Python 发布测试 59 项通过，补充时间边界回归后公开 CI 为 64 项。
 
 真实独立 helper 使用当前候选字节码与内嵌 payload、合成 CI 身份 `0.1.0-ci.900.1` 完成退出后自身安装；当 `localDevelopment=true` 且旧 marker 存在时，Folkways 文件和 pending 摘要保持，下一次探针清理旧 helper。[实际 helper 机器记录](acceptance/2026-10-24-independent-self-helper.json) 标明这是预先验证队列的离线 fixture，未进行公开发行或真实网络更新，也未启动 Minecraft。
 
