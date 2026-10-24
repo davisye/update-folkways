@@ -1,12 +1,16 @@
 package dev.davisye.folkways.update.mod;
 
 import dev.davisye.folkways.update.core.Config;
+import dev.davisye.folkways.update.core.UpdateCheckResult;
+import java.util.ArrayList;
+import java.util.List;
 import dev.davisye.folkways.update.core.DependencyConflictException;
 import dev.davisye.folkways.update.core.TakeoverRejectedException;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.network.chat.Component;
@@ -33,29 +37,27 @@ public final class ClientUpdates {
     private static boolean initialized;
     private static volatile long nextPoll;
     private static volatile Component status = text("idle");
-    private static volatile Component queuedNotice;
-    private static String lastNotice = "";
+    private record CheckResult(Component status, List<UpdateReminderQueue.Notice<Component>> reminders,
+                               LatestCheckQueue.Ticket ticket) {}
+    private static final AtomicReference<CheckResult> REMINDER = new AtomicReference<>();
 
     private static Component text(String key) { return Component.translatable("folkways_updater.status." + key); }
     public static Component status() { return status; }
-    private static final LatestCheckQueue<ClientCheckRequest, Component> CHECKS = new LatestCheckQueue<>(WORKER,
+    private static final LatestCheckQueue<ClientCheckRequest, CheckResult> CHECKS = new LatestCheckQueue<>(WORKER,
             ClientUpdates::check, request -> {
                 Config config = request.settings();
                 status = Component.translatable("folkways_updater.status." +
                         (request.takeOverExisting() ? "checking_takeover" : "checking_source"), config.repository, config.channel);
-                queuedNotice = null;
+                REMINDER.set(null);
             }, result -> {
-                status = result;
-                if (!result.getString().equals(lastNotice)) {
-                    lastNotice = result.getString();
-                    queuedNotice = result;
-                }
+                status = result.status();
+                REMINDER.set(result.reminders().isEmpty() ? null : result);
             }, ClientCheckRequest::identity);
     public static boolean checking() { return CHECKS.running(); }
 
     /** Saving always requests the latest settings, including while an older check is running. */
     public static boolean settingsSaved() { return requestCheck(); }
-    public static void settingsSaving() { CHECKS.invalidate(); }
+    public static void settingsSaving() { CHECKS.invalidate(); REMINDER.set(null); }
 
     /** Only the saved selection explicitly confirmed by the user receives this authorization. */
     public static synchronized boolean requestTakeover(Config confirmed) throws java.io.IOException {
@@ -86,43 +88,67 @@ public final class ClientUpdates {
                 if (!checking()) requestCheck();
             }, 5, 5, TimeUnit.SECONDS);
         }
-        Component notice = queuedNotice;
-        if (notice != null) {
-            queuedNotice = null;
-            Minecraft client = Minecraft.getInstance();
-            SystemToast.addOrUpdate(client.getToasts(), TOAST,
-                    Component.translatable("folkways_updater.config.title"), notice);
-            if (client.player != null) client.player.displayClientMessage(notice, false);
+        CheckResult ready = REMINDER.get();
+        if (ready != null) {
+            try {
+                // History consumption and display share the request-revocation linearization point.
+                // This lock covers only a bounded local write and display, never network or archive scans.
+                ready.ticket().commit(() -> {
+                    if (!REMINDER.compareAndSet(ready, null)) return;
+                    var queue = new UpdateReminderQueue<Component>();
+                    queue.replace(ready.reminders());
+                    List<Component> fresh = queue.takeNew(UpdaterMod::firstUpdateReminder);
+                    if (fresh.isEmpty()) return;
+                    var notice = Component.empty();
+                    for (Component message : fresh) {
+                        if (!notice.getSiblings().isEmpty()) notice.append(" | ");
+                        notice.append(message);
+                    }
+                    Minecraft client = Minecraft.getInstance();
+                    SystemToast.addOrUpdate(client.getToasts(), TOAST,
+                            Component.translatable("folkways_updater.config.title"), notice);
+                    if (client.player != null) client.player.displayClientMessage(notice, false);
+                });
+            } catch (Exception error) {
+                // A superseded request cannot consume history or clear a newer completed result.
+                REMINDER.compareAndSet(ready, null);
+            }
         }
     }
 
-    private static Component check(ClientCheckRequest request, LatestCheckQueue.Ticket current) {
+    private static CheckResult check(ClientCheckRequest request, LatestCheckQueue.Ticket current) {
         Config requested = request.settings();
         try {
-            String folkways;
+            UpdateCheckResult folkways;
             try {
                 if (!current.getAsBoolean()) return null;
-                folkways = requested.isLocalDevelopment(GAME_DIR) ? text("local").getString()
-                        : UpdaterMod.folkwaysUpdater().checkAndStage(requested, request.takeOverExisting(), current,
+                folkways = requested.isLocalDevelopment(GAME_DIR) ? new UpdateCheckResult(text("local").getString(), null)
+                        : UpdaterMod.folkwaysUpdater().checkAndStageResult(requested, request.takeOverExisting(), current,
                                 action -> current.commit(action::run));
             }
             catch (Exception error) {
-                folkways = failure(error);
+                folkways = new UpdateCheckResult(failure(error), null);
                 LOG.warn("Folkways {} / {} check unavailable ({}): {}", requested.repository, requested.channel,
-                        error.getClass().getSimpleName(), folkways);
+                        error.getClass().getSimpleName(), folkways.message());
             }
             if (!current.getAsBoolean()) return null;
-            String self;
-            try { self = UpdaterMod.checkOwnUpdate(); }
+            UpdateCheckResult self;
+            try { self = UpdaterMod.checkOwnUpdateResult(); }
             catch (Exception error) {
                 LOG.warn("Updater self-check unavailable ({})", error.getClass().getSimpleName());
-                self = text("self_error").getString();
+                self = new UpdateCheckResult(text("self_error").getString(), null);
             }
-            return Component.translatable("folkways_updater.status.source_result", requested.repository,
-                    requested.channel, readable(folkways, requested), readable(self, requested));
+            List<UpdateReminderQueue.Notice<Component>> reminders = new ArrayList<>();
+            if (folkways.reminderKey() != null) reminders.add(new UpdateReminderQueue.Notice<>(folkways.reminderKey(),
+                    Component.translatable("folkways_updater.status.source_update", requested.repository,
+                            requested.channel, readable(folkways.message(), requested))));
+            if (self.reminderKey() != null) reminders.add(new UpdateReminderQueue.Notice<>(self.reminderKey(),
+                    Component.literal(readable(self.message(), requested))));
+            return new CheckResult(Component.translatable("folkways_updater.status.source_result", requested.repository,
+                    requested.channel, readable(folkways.message(), requested), readable(self.message(), requested)), reminders, current);
         } catch (Exception error) {
             LOG.warn("Client update check failed ({})", error.getClass().getSimpleName());
-            return text("config_error");
+            return new CheckResult(text("config_error"), List.of(), current);
         }
     }
 

@@ -3,6 +3,10 @@ package dev.davisye.folkways.update.mod;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import dev.davisye.folkways.update.core.Config;
+import dev.davisye.folkways.update.core.UpdateCheckResult;
+import dev.davisye.folkways.update.core.UpdateReminderHistory;
+import java.util.ArrayList;
+import java.util.List;
 import dev.davisye.folkways.update.core.Updater;
 import dev.davisye.folkways.update.core.DropInUpdater;
 import dev.davisye.folkways.update.core.AutomaticRestart;
@@ -45,8 +49,13 @@ public final class UpdaterMod {
     private volatile boolean stopping;
     private boolean shutdownIssued;
     private boolean restartRequested;
-    private String lastNotice = "";
+    private static final UpdateReminderHistory REMINDERS = new UpdateReminderHistory(FMLPaths.GAMEDIR.get(),
+            error -> LOG.warn("Update reminder history unavailable ({}); reminders remain deduplicated for this session",
+                    error.getClass().getSimpleName()));
+
+    static boolean firstUpdateReminder(String key) { return REMINDERS.first(key); }
     private volatile long nextPoll;
+    private volatile String lastCheckStatus = "";
 
     public UpdaterMod() {
         try {
@@ -103,24 +112,35 @@ public final class UpdaterMod {
     private void check(MinecraftServer server) {
         if (stopping || !checking.compareAndSet(false, true)) return;
         try {
-            String self;
-            try { self = checkOwnUpdate(); }
-            catch (Exception e) { self = "Updater self-check unavailable; current updater retained"; }
-            String folkways;
+            UpdateCheckResult self;
+            try { self = checkOwnUpdateResult(); }
+            catch (Exception e) {
+                LOG.warn("Updater self-check unavailable ({})", e.getClass().getSimpleName());
+                self = new UpdateCheckResult("Updater self-check unavailable; current updater retained", null);
+            }
+            UpdateCheckResult folkways;
             try {
                 folkways = Config.load(gameDir).isLocalDevelopment(gameDir)
-                        ? "本地开发已开启：仅暂停 Folkways 与前置更新；更新器自身独立更新。"
-                        : folkwaysUpdater().checkAndStage();
+                        ? new UpdateCheckResult("本地开发已开启：仅暂停 Folkways 与前置更新；更新器自身独立更新。", null)
+                        : folkwaysUpdater().checkAndStageResult();
             }
-            catch (Exception e) { folkways = "Folkways check unavailable; installed Folkways retained"; }
-            String notice = self + " | " + folkways;
-            if (!stopping && !notice.equals(lastNotice)) {
-                lastNotice = notice;
-                server.execute(() -> {
-                    if (!stopping) server.getPlayerList().broadcastSystemMessage(
-                            Component.literal("[Folkways updater] " + notice), false);
-                });
+            catch (Exception e) {
+                LOG.warn("Folkways check unavailable ({})", e.getClass().getSimpleName());
+                folkways = new UpdateCheckResult("Folkways check unavailable; installed Folkways retained", null);
             }
+            lastCheckStatus = self.message() + " | " + folkways.message();
+            var queue = new UpdateReminderQueue<String>();
+            List<UpdateReminderQueue.Notice<String>> notices = new ArrayList<>();
+            if (self.reminderKey() != null) notices.add(new UpdateReminderQueue.Notice<>(self.reminderKey(), self.message()));
+            if (folkways.reminderKey() != null) notices.add(new UpdateReminderQueue.Notice<>(folkways.reminderKey(), folkways.message()));
+            queue.replace(notices);
+            if (!stopping && !notices.isEmpty()) server.execute(() -> {
+                // An empty server has nobody to notify; do not consume a persistent reminder yet.
+                if (stopping || server.getPlayerList().getPlayers().isEmpty()) return;
+                List<String> fresh = queue.takeNew(UpdaterMod::firstUpdateReminder);
+                if (!fresh.isEmpty()) server.getPlayerList().broadcastSystemMessage(
+                        Component.literal("[Folkways updater] " + String.join(" | ", fresh)), false);
+            });
         } catch (Exception e) {
             // Do not log download URLs, launcher arguments, or credentials.
             LOG.warn("Update check failed ({}); installed files were retained", e.getClass().getSimpleName());
@@ -135,7 +155,8 @@ public final class UpdaterMod {
                 .then(Commands.literal("status").executes(context -> {
                     try {
                         String status = folkwaysUpdater().status() + " | " + (dropIn == null ? "No installed updater JAR target in this IDE run" : dropIn.status());
-                        context.getSource().sendSuccess(() -> Component.literal(status), false);
+                        String checked = lastCheckStatus;
+                        context.getSource().sendSuccess(() -> Component.literal(status + (checked.isEmpty() ? "" : " | last-check=" + checked)), false);
                         return 1;
                     } catch (Exception e) { return fail(context.getSource(), "无法读取更新状态。"); }
                 }))
@@ -200,11 +221,13 @@ public final class UpdaterMod {
         return Config.load(FMLPaths.GAMEDIR.get()).localDevelopment;
     }
 
-    static String checkOwnUpdate() throws Exception {
+    static String checkOwnUpdate() throws Exception { return checkOwnUpdateResult().message(); }
+
+    static UpdateCheckResult checkOwnUpdateResult() throws Exception {
         DropInUpdater updater = dropIn;
-        if (updater == null) return "No installed updater JAR target in this IDE run";
+        if (updater == null) return new UpdateCheckResult("No installed updater JAR target in this IDE run", null);
         updater.startHelper();
-        return updater.checkAndStage();
+        return updater.checkAndStageResult();
     }
 
     private void prepareAutomaticRestart() {
