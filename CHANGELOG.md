@@ -24,6 +24,8 @@
 
 ### Changed
 
+- 构建依赖升级为 Gradle 9.8.2、ModDev 2.0.148 与 JUnit 6.1.3；保持 Java 21 / NeoForge 1.21.1，Gson 仍采用 Minecraft 严格要求的 2.10.1。
+
 - Windows 建连失败时只读回退到已启用的静态系统 HTTP 代理，不要求额外 JVM 参数；TLS、HTTP 状态、正文大小和摘要校验不绕过。
 
 - 主安装流程改为一个 NeoForge Mod JAR，内嵌 helper 自动释放；不再要求用户手放 standalone、seed、元数据或密钥。
