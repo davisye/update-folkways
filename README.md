@@ -40,7 +40,7 @@
 https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<完整JAR文件名>
 ```
 
-首次手工下载仍由你确认可信来源。镜像负责传输，自动更新的信任依据来自官方 GitHub API 与成功 CI 构建。具体安装、退出和异常恢复说明见 [安装指南](docs/installation.md)。已有 Bootstrap/seed 用户请看其中的 [旧方式迁移](docs/installation.md#旧-bootstrapseed-方式迁移)。
+首次手工下载仍由你确认可信来源。镜像可转发 GitHub 校验 API 和附件；自动更新核对固定仓库的 API 元数据、资产摘要与成功 CI 构建。使用镜像时还需信任其转发的数据。具体安装、退出和异常恢复说明见 [安装指南](docs/installation.md)。已有 Bootstrap/seed 用户请看其中的 [旧方式迁移](docs/installation.md#旧-bootstrapseed-方式迁移)。
 
 ## 一次更新的节奏
 
@@ -80,9 +80,9 @@ flowchart TD
 
 Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一次更新来自同一构建。基础安装需要的外置库是 LDLib2；选择可选扩展时，会补齐缺失的 Create、Modular Golems、Kaleidoscope Cookery，以及必要的 L2Library。Ponder、Flywheel、Starlark 等内嵌库不重复安装。已有兼容前置只读复用，版本冲突时提示并保留原文件。具体固定版本和官方来源见 [前置安装规则](docs/dependencies.md)。
 
-`manifestUrl` 留空即使用官方 GitHub 来源，不表示关闭 Folkways 更新。首次自动安装只接管没有 Folkways 的空集合；已有手动或本地编译的 Folkways JAR 不被静默接管。release、rc、beta、alpha、nightly 是可选渠道，当前两源实际只有 nightly；没有符合条件的发行时保留当前文件。
+`manifestUrl` 留空即使用官方 GitHub 来源，不表示关闭 Folkways 更新。首次自动安装默认要求没有 Folkways；已有手动或本地编译的 Folkways JAR 可在“更多设置 → 接管现有并更新”中明确授权一次。完整校验后登记，整个游戏退出后先备份再替换；未知/复合/嵌套 JAR 和手动依赖不会被接管。release、rc、beta、alpha、nightly 是可选渠道，当前两源实际只有 nightly；没有符合条件的发行时保留当前文件。
 
-网络新配置默认 `mirror-first`，GitHub 下载与 [github.davisye.cn](https://github.davisye.cn/) 可故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。Windows 建连失败时可回退到已启用的静态系统 HTTP 代理，无需额外启动参数。可信元信息来自官方 API；不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
+网络新配置默认 `mirror-first`，GitHub 校验 API 和附件下载均与 [github.davisye.cn](https://github.davisye.cn/) 按该策略故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。Windows 建连失败时可回退到已启用的静态系统 HTTP 代理，无需额外启动参数。API 元数据的仓库、CI、摘要仍需校验；经镜像取得时同时信任该镜像，不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
 
 [OpenList](https://pan.davisye.cn/) 可展示 Folkways 发布链接。[主机侧自动同步](docs/openlist-sync.md) 每十分钟检查两个仓库，只更新各自已完成发布的 nightly 外链，并保留其他目录；JAR 继续由国内镜像分发。其他渠道按版本归档；外链目录不等于持久二进制存储。发布工具和存储边界见 [发布镜像指南](docs/publishing.md)。
 

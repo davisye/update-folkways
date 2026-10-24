@@ -41,15 +41,15 @@ updater 自身由 `selfUpdateEnabled` 独立控制，本地开发开启不阻止
 
 ## 发布信任
 
-updater 自身固定核对 `davisye/update-folkways` 的官方 GitHub HTTPS API：release asset 大小与 SHA256、同一次成功 `ci.yml` push、完整提交、递增序号和 JAR 内构建身份。下载字节可以经允许的镜像传输；镜像不能独立决定可信摘要。SHA256 不是数字签名。
+updater 自身固定核对 `davisye/update-folkways` 的官方 GitHub HTTPS API：release asset 大小与 SHA256、同一次成功 `ci.yml` push、完整提交、递增序号和 JAR 内构建身份。GitHub 校验 API 与下载字节均可按网络设置经允许镜像传输；使用镜像时，摘要和 CI 元数据同样依赖该镜像正确转发。SHA256 不是数字签名。
 
-Folkways 默认从所选仓库的官方 GitHub Release 获取，校验官方资产大小、SHA256、固定提交及对应成功发布 CI，下载前后复核发行快照。该信任依赖所选仓库及 GitHub；上游 JAR 没有本更新器的构建身份元数据，成功 CI 记录不能称为文件签名或独立构建证明。
+Folkways 默认从所选仓库的官方 GitHub Release 获取，校验官方资产大小、SHA256、固定提交及对应成功发布 CI，下载前后复核发行快照。该信任依赖所选仓库及 GitHub，使用 API 镜像时还包括该元数据中继；上游 JAR 没有本更新器的构建身份元数据，成功 CI 记录不能称为文件签名或独立构建证明。
 
 `manifestUrl` 非空时选择独立签名通道，信任预配置的 Ed25519 公钥。签名覆盖精确 payload、源、MC、渠道、构建、序号及所有组件摘要。公共自动签名发布仍未启用，不影响默认官方来源。
 
 缺失前置使用固定审核的官方 Modrinth 项目、版本、文件大小和 SHA-512；官方版本 API、MC/加载器标签和真实 JAR 身份/依赖必须匹配。Create、Modular Golems、Cookery 及必要间接依赖随所选扩展补齐，不通过猜测文件名或任意搜索结果安装。已有兼容前置只读复用，手动冲突不会被覆盖。下载闭包与离线安装仍在同一归属、缓存、恢复和进程门禁内。
 
-受信 GitHub 仓库/CI 权限或本机同权限用户被攻破不在这套机制能独立消除的信任范围内。
+受信 GitHub 仓库/CI 权限、参与元数据转发的镜像或本机同权限用户被攻破不在这套机制能独立消除的信任范围内。
 
 ## 文件事务与缓存
 

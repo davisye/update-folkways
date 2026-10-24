@@ -184,4 +184,24 @@ class ApprovedDependenciesTest {
         assertTrue(fixture.base.updater.applyPending().contains("Installed official")); assertArrayEquals(compatible, Files.readAllBytes(user));
         assertFalse(fixture.base.state().owned.containsKey("l2itemselector"));
     }
+    @Test void identicalEmbeddedArchiveProvesArtifactIdentityWithoutGuessingItsVersionQualifier() throws Exception {
+        Fixture fixture = new Fixture("classifier-proof", List.of("core", "vanilla", "cookery"));
+        byte[] spark = jar("spark", "1.10.124", "");
+        byte[] cookery = nested(jar("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1", ""), "spark", "1.10.124-neoforge-1.21.1", spark);
+        fixture.pin("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1", cookery); fixture.refreshCatalog();
+        Path user = fixture.base.game.resolve("mods/user-spark.jar"); Files.write(user, spark); fixture.base.updater.checkAndStage();
+        assertTrue(fixture.plan().external.stream().anyMatch(proof -> proof.file.equals("user-spark.jar")));
+        assertTrue(fixture.base.updater.applyPending().contains("Installed official")); assertArrayEquals(spark, Files.readAllBytes(user));
+        assertFalse(fixture.base.state().owned.containsKey("spark"));
+        assertThrows(IOException.class, () -> ModMetadata.compare("1.10.124-neoforge-1.21.1", "1.10.124"), "The classifier is not generally normalized or trusted");
+    }
+    @Test void sameModVersionWithDifferentArchiveBytesCannotClaimTheEmbeddedArtifactIdentity() throws Exception {
+        Fixture fixture = new Fixture("classifier-mismatch", List.of("core", "vanilla", "cookery"));
+        byte[] spark = jar("spark", "1.10.124", "");
+        byte[] cookery = nested(jar("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1", ""), "spark", "1.10.124-neoforge-1.21.1", spark);
+        fixture.pin("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1", cookery); fixture.refreshCatalog();
+        Path user = fixture.base.game.resolve("mods/user-spark.jar"); byte[] modified = jar("spark", "1.10.124", "# local rebuild"); Files.write(user, modified);
+        assertEquals("spark", assertThrows(UnverifiedBundleException.class, fixture.base.updater::checkAndStage).id);
+        assertArrayEquals(modified, Files.readAllBytes(user)); assertFalse(Files.exists(fixture.base.pending()));
+    }
 }

@@ -79,7 +79,7 @@ public final class Transport implements Updater.Fetcher {
     }
 
     @FunctionalInterface interface Validator { void verify(byte[] bytes) throws Exception; }
-    /** Trust bootstrap: official API HTTPS only, with no mirror and no redirects. */
+    /** Fixed canonical API identity; the configured GitHub mirror is an explicitly trusted relay. */
     byte[] fetchOfficialApi(String url, long maximum) throws Exception {
         URI uri = safeUri(url);
         if (!"api.github.com".equals(uri.getHost()) || !uri.getPath().startsWith("/repos/davisye/update-folkways/")) throw new IOException("Self-update API source is fixed");
@@ -92,23 +92,41 @@ public final class Transport implements Updater.Fetcher {
         if (!github && !modrinth) throw new IOException("Unsupported official Folkways/dependency API");
         return officialJson(uri, maximum);
     }
-    private byte[] officialJson(URI uri, long maximum) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12))
-            .header("User-Agent", "folkways-bootstrap/0.1").header("Accept", "application/vnd.github+json").GET().build();
-        HttpResponse<byte[]> response = sendWithFallback(request, maximum);
-        if (response.statusCode() != 200) throw new IOException("Official self-update API unavailable (HTTP " + response.statusCode() + ")");
-        if (!response.headers().firstValue("content-type").orElse("").toLowerCase(Locale.ROOT).contains("application/json")) throw new IOException("Official API returned a non-JSON response");
-        return response.body();
+    private List<String> routes(String url) throws IOException {
+        String mirror = proxy(url);
+        boolean first = config.networkPolicy.equals("mirror-first")
+                || (config.networkPolicy.equals("region") && "CN".equalsIgnoreCase(config.regionHint));
+        if (mirror.equals(url)) return List.of(url);
+        return first ? List.of(mirror, url) : List.of(url, mirror);
+    }
+    private byte[] officialJson(URI canonical, long maximum) throws Exception {
+        IOException last = null;
+        for (String route : routes(canonical.toString())) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder(safeUri(route)).timeout(Duration.ofSeconds(12))
+                    .header("User-Agent", "folkways-bootstrap/0.1").header("Accept", "application/vnd.github+json").GET().build();
+                HttpResponse<byte[]> response = sendWithFallback(request, maximum);
+                // API redirects are never followed; each allowed route must itself return bounded JSON.
+                if (response.statusCode() != 200) throw new IOException("GitHub/dependency API unavailable (HTTP " + response.statusCode() + ")");
+                if (!response.headers().firstValue("content-type").orElse("").toLowerCase(Locale.ROOT).contains("application/json"))
+                    throw new IOException("API returned a non-JSON response");
+                byte[] body = response.body();
+                if (body.length > maximum) throw new BodyLimitException();
+                try {
+                    var json = com.google.gson.JsonParser.parseString(new String(body, java.nio.charset.StandardCharsets.UTF_8));
+                    if (!json.isJsonObject() && !json.isJsonArray()) throw new IOException("API returned an invalid JSON document");
+                } catch (com.google.gson.JsonParseException error) { throw new IOException("API returned invalid JSON"); }
+                return body;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt(); throw interrupted;
+            } catch (IOException error) { last = error; }
+        }
+        throw new IOException("All allowed API routes failed; installed files were retained", last);
     }
     public byte[] fetch(String url, long maximum) throws Exception { return fetchValidated(url, maximum, ignored -> {}); }
     byte[] fetchValidated(String url, long maximum, Validator validator) throws Exception {
         URI original = safeUri(url);
-        List<String> candidates = new ArrayList<>();
-        String mirror = proxy(url);
-        boolean first = config.networkPolicy.equals("mirror-first") || (config.networkPolicy.equals("region") && "CN".equalsIgnoreCase(config.regionHint));
-        if (first && !mirror.equals(url)) candidates.add(mirror);
-        candidates.add(url);
-        if (!candidates.contains(mirror)) candidates.add(mirror);
+        List<String> candidates = routes(url);
         Exception last = null;
         for (String candidate : candidates) {
             try {

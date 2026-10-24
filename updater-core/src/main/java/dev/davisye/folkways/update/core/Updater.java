@@ -13,6 +13,8 @@ import java.util.zip.*;
 /** Offline-safe staging and an externally supervised, recoverable install transaction. */
 public final class Updater {
     @FunctionalInterface public interface Fetcher { byte[] fetch(String url, long maximum) throws Exception; }
+    @FunctionalInterface public interface PendingCommit { void run() throws Exception; }
+    @FunctionalInterface public interface CommitAuthorization { void commit(PendingCommit action) throws Exception; }
     static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     static final long MAX_BUNDLE = 128L * 1024 * 1024;
     static final Set<String> MODULES = Set.of("core", "vanilla", "create", "modulargolems", "cookery");
@@ -72,10 +74,20 @@ public final class Updater {
         });
     }
 
-    public String checkAndStage() throws Exception {
-        Config c = Config.load(game);
+    public String checkAndStage() throws Exception { return checkAndStage(null, false); }
+    public String checkAndStage(boolean takeOverExisting) throws Exception { return checkAndStage(null, takeOverExisting); }
+    /** The consent applies only to this defensive configuration snapshot, never a subsequently selected source. */
+    public String checkAndStage(Config expected, boolean takeOverExisting) throws Exception { return checkAndStage(expected, takeOverExisting, () -> true); }
+    public String checkAndStage(Config expected, boolean takeOverExisting, java.util.function.BooleanSupplier stillCurrent) throws Exception {
+        return checkAndStage(expected, takeOverExisting, stillCurrent, PendingCommit::run);
+    }
+    public String checkAndStage(Config expected, boolean takeOverExisting, java.util.function.BooleanSupplier stillCurrent, CommitAuthorization authorization) throws Exception {
+        Objects.requireNonNull(stillCurrent); Objects.requireNonNull(authorization);
+        Config c = expected == null ? Config.load(game) : JSON.fromJson(JSON.toJson(expected), Config.class);
+        c.validate();
         if (c.isLocalDevelopment(game)) return "Local development: update check and replacement disabled";
-        if (c.manifestUrl.isBlank()) return new GitHubFolkways(this).checkAndStage(c);
+        if (c.manifestUrl.isBlank()) return new GitHubFolkways(this, stillCurrent, authorization).checkAndStage(c, takeOverExisting);
+        if (takeOverExisting) throw new TakeoverRejectedException("", TakeoverRejectedException.Reason.UNSUPPORTED_CHANNEL);
         return locked(() -> {
             requireManaged(c);
             if (Files.exists(home.resolve(GitHubFolkways.JOURNAL))) throw new IOException("Recover the official GitHub transaction before changing channels");

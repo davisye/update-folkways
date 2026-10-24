@@ -162,4 +162,22 @@ class GitHubFolkwaysTest {
         assertTrue(ModMetadata.matches("1.6.0-neoforge+mc1.21.1", "[1.6.0-neoforge+mc1.21.1,1.7)"));
         assertThrows(IOException.class, () -> ModMetadata.matches("2.2.37-unknown", "[2.2.37,)"));
     }
+    @Test void sourceSwitchUsesIndependentHighWaterAndCanReturnToAnAlreadyAcceptedBuild() throws Exception {
+        fixture(true); publish(114); updater.checkAndStage(); updater.applyPending();
+        String upstreamScope = config.scope(); byte[] upstreamCore = Files.readAllBytes(game.resolve("mods/folkways-core-neoforge-1.21.1-0.1.0.jar"));
+        config.repository = "davisye/folkways"; save(); publish(14); String forkScope = config.scope();
+        assertTrue(updater.checkAndStage().contains(release.target_commitish)); updater.applyPending(); assertEquals(forkScope, state().scope);
+        assertEquals(114001, state().highWater.get(upstreamScope)); assertEquals(14001, state().highWater.get(forkScope));
+        config.repository = "IzakyL/folkways"; save(); publish(114); assertTrue(updater.checkAndStage().contains(release.target_commitish)); updater.applyPending();
+        assertEquals(upstreamScope, state().scope); assertArrayEquals(upstreamCore, Files.readAllBytes(game.resolve("mods/folkways-core-neoforge-1.21.1-0.1.0.jar")));
+        assertEquals(114001, state().highWater.get(upstreamScope)); assertEquals(14001, state().highWater.get(forkScope)); assertFalse(Files.exists(pending()));
+    }
+    @Test void selectingInstalledSourceDoesNotApplyAnotherSourceQueueAndSwitchingBackReusesThatQueue() throws Exception {
+        fixture(true); publish(114); updater.checkAndStage(); updater.applyPending();
+        config.repository = "davisye/folkways"; save(); publish(14); updater.checkAndStage(); byte[] queued = Files.readAllBytes(pending().resolve("plan.json"));
+        config.repository = "IzakyL/folkways"; save(); publish(114); assertTrue(updater.checkAndStage().contains("Already installed"));
+        assertTrue(updater.applyPending().contains("different source")); assertArrayEquals(queued, Files.readAllBytes(pending().resolve("plan.json")));
+        config.repository = "davisye/folkways"; save(); publish(14); String ready = updater.checkAndStage();
+        assertTrue(ready.contains("already downloaded")); assertTrue(ready.contains(release.target_commitish)); updater.applyPending(); assertEquals(config.scope(), state().scope);
+    }
 }

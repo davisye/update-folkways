@@ -118,4 +118,4 @@ UrlTree 适合展示只读外链；可写能力由后端驱动决定。`PUT /api
 
 生产适配器上线前，应在授权测试挂载依次验证：最小权限账号、上传任务完成、写后读回 SHA256、访客鉴权、缓存失效、同时发布、中断恢复、正式版本防覆盖、latest 不倒退，以及上游删除后归档二进制仍可获取。
 
-`github.davisye.cn` 的 Release JAR 路径经过完整下载和 Range 字节验证，代理格式为 `/_github/<official-host>/<path>`。raw 文本 Range 仍有已知压缩表示边界，不能以 Release 验证推断所有路径正确。客户端按签名摘要验包并在允许路由间回退；代理不是信任根。
+`github.davisye.cn` 的 Release JAR 路径经过完整下载和 Range 字节验证，代理格式为 `/_github/<official-host>/<path>`。raw 文本 Range 仍有已知压缩表示边界，不能以 Release 验证推断所有路径正确。可选 Ed25519 签名通道按预置信任公钥验证，代理不成为该签名通道的信任根；默认 GitHub API 通道若经镜像获取校验数据，则同时依赖该镜像正确转发。

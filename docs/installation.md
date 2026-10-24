@@ -10,7 +10,7 @@
 
 用于退出后安装的独立 helper 已内嵌在 Mod 中，自动释放到 `.folkways-updater/`。不要手工把 helper 放进 mods。
 
-国内下载可在官方 Release 确认完整 JAR 名称后，使用 `https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<完整JAR文件名>`。首次下载属于人工信任步骤；运行时不能用镜像自己的摘要代替官方 API 与 CI 身份验证。
+国内下载可在官方 Release 确认完整 JAR 名称后，使用 `https://github.davisye.cn/_github/github.com/davisye/update-folkways/releases/download/nightly/<完整JAR文件名>`。首次下载属于人工信任步骤；运行时按固定仓库 API 与 CI 身份校验，API 和附件都遵守网络策略。镜像模式也需要信任其转发的校验数据。
 
 本项目不代装 Minecraft 或 NeoForge。空实例的默认基础安装包含同次发布的 Folkways Core、Vanilla，以及缺失的 LDLib2 2.2.37-all。Ponder、Flywheel、Starlark 已由上游内嵌，无需重复安装。
 

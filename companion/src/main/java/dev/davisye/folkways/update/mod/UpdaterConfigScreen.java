@@ -8,6 +8,7 @@ import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.fml.ModList;
@@ -94,14 +95,18 @@ public final class UpdaterConfigScreen extends Screen {
             }, t("CN".equals(draft.regionHint) ? "region_cn" : "region_unset"))
                     .setTooltip(Tooltip.create(t("region_help")));
             y += 24;
-            button("folder", x, y, content, () -> Util.getPlatform().openFile(GAME.resolve(".folkways-updater").toFile()));
+            Button takeover = button("takeover", x, y, content, this::confirmTakeover);
+            takeover.active = readable && !draft.localDevelopment && draft.manifestUrl.isBlank();
+            takeover.setTooltip(Tooltip.create(t(draft.localDevelopment ? "takeover_local"
+                    : !draft.manifestUrl.isBlank() ? "takeover_signed" : "takeover_help")));
             y += 24;
-            button("back_basic", x, y, content, () -> { advanced = false; rebuildWidgets(); });
+            button("folder", x, y, half, () -> Util.getPlatform().openFile(GAME.resolve(".folkways-updater").toFile()));
+            button("back_basic", x + half + 6, y, content - half - 6, () -> { advanced = false; rebuildWidgets(); });
         }
         int footer = height - 28;
-        button("save", x, footer, third, () -> save(false)).active = readable;
-        checkButton = button("check", x + third + 6, footer, third, () -> save(true));
-        checkButton.active = readable && !ClientUpdates.checking();
+        button("save", x, footer, third, this::save).active = readable;
+        checkButton = button("check", x + third + 6, footer, third, this::save);
+        checkButton.active = readable;
         checkButton.setTooltip(Tooltip.create(t("check_help")));
         button("back", x + 2 * (third + 6), footer, content - 2 * (third + 6), this::onClose);
     }
@@ -117,29 +122,57 @@ public final class UpdaterConfigScreen extends Screen {
         control.setTooltip(Tooltip.create(t(installed ? "module_help" : "module_missing", requirement)));
     }
 
-    private void save(boolean check) {
+    private void save() {
         if (!readable) return;
         try {
-            Config.edit(GAME, current -> {
-                current.repository = draft.repository;
-                current.channel = draft.channel;
-                current.modules = new ArrayList<>(draft.modules);
-                current.localDevelopment = draft.localDevelopment;
-                current.networkPolicy = draft.networkPolicy;
-                current.selfUpdateEnabled = draft.selfUpdateEnabled;
-                current.commandsEnabled = draft.commandsEnabled;
-                current.pollSeconds = draft.pollSeconds;
-                current.selfUpdateChannel = draft.selfUpdateChannel;
-                current.regionHint = draft.regionHint;
-            });
-            ClientUpdates.settingsSaved();
-            feedback = check ? t(ClientUpdates.requestCheck() ? "requested" : "busy") : t("saved");
+            persistDraft(draft, false);
+            feedback = t(ClientUpdates.settingsSaved() ? "requested" : "busy");
             feedbackUntil = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
         } catch (Exception error) { feedback = t("save_error"); feedbackUntil = Long.MAX_VALUE; }
     }
 
+    private Config persistDraft(Config selection, boolean takeover) throws java.io.IOException {
+        Config[] saved = new Config[1];
+        ClientUpdates.settingsSaving();
+        Config.edit(GAME, current -> {
+            if (takeover) ClientCheckRequest.requireTakeoverAllowed(selection, current);
+            current.repository = selection.repository;
+            current.channel = selection.channel;
+            current.modules = new ArrayList<>(selection.modules);
+            current.localDevelopment = selection.localDevelopment;
+            current.networkPolicy = selection.networkPolicy;
+            current.selfUpdateEnabled = selection.selfUpdateEnabled;
+            current.commandsEnabled = selection.commandsEnabled;
+            current.pollSeconds = selection.pollSeconds;
+            current.selfUpdateChannel = selection.selfUpdateChannel;
+            current.regionHint = selection.regionHint;
+            saved[0] = current;
+        });
+        return saved[0];
+    }
+
+    private void confirmTakeover() {
+        if (!readable || draft.localDevelopment || !draft.manifestUrl.isBlank()) return;
+        try {
+            Config confirmed = new ClientCheckRequest(draft, true).settings();
+            Component message = t("takeover_message", confirmed.repository, confirmed.channel,
+                    String.join(", ", confirmed.modules));
+            minecraft.setScreen(new ConfirmScreen(accepted -> {
+                minecraft.setScreen(this);
+                if (!accepted) return;
+                try {
+                    Config saved = persistDraft(confirmed, true);
+                    feedback = t(ClientUpdates.requestTakeover(saved) ? "takeover_requested" : "takeover_queued");
+                    feedbackUntil = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
+                } catch (Exception error) {
+                    feedback = t("takeover_error"); feedbackUntil = Long.MAX_VALUE;
+                }
+            }, t("takeover_title"), message, t("takeover_confirm"), t("takeover_cancel")));
+        } catch (Exception error) { feedback = t("takeover_error"); feedbackUntil = Long.MAX_VALUE; }
+    }
+
     @Override public void tick() {
-        if (checkButton != null) checkButton.active = readable && !ClientUpdates.checking();
+        if (checkButton != null) checkButton.active = readable;
     }
     @Override public void onClose() { minecraft.setScreen(parent); }
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
