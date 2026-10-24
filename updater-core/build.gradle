@@ -1,6 +1,6 @@
 // Minecraft 1.21.1 strictly requires Gson 2.10.1 on the companion classpath.
 // Keep the shared core and embedded helper compatible with that runtime.
-dependencies { api 'com.google.code.gson:gson:2.10.1' }
+dependencies { api 'com.google.code.gson:gson:2.14.0' }
 
 def updaterBuildInfo = layout.buildDirectory.dir('generated/updaterBuildInfo')
 tasks.register('generateUpdaterBuildInfo') {
