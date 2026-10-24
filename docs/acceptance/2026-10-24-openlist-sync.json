@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-10-24T06:33:56.846981+00:00",
+  "deployment": {
+    "commit": "59510f2ed0404dd9db8418fa72b5269b7c798764",
+    "installedAt": "2026-10-24T06:18:13.642549+00:00",
+    "files": [
+      {
+        "path": "/opt/folkways-openlist-sync/sync_openlist.py",
+        "sha256": "bb7f661d5fe1b2c3a1d81f528745c295d80fd74af7c5fdde3fc9b408b2ef3562"
+      },
+      {
+        "path": "/etc/systemd/system/folkways-nightly-sync.service",
+        "sha256": "4d0bdb88be76eac5a2659854d4b85b4e0d350faee71ad4a35fcfdb9aaedee792"
+      },
+      {
+        "path": "/etc/systemd/system/folkways-nightly-sync.timer",
+        "sha256": "9ee03935274c87584e0ef8de93d1c5c02007399d9fe587f849154bd6da9891fb"
+      }
+    ],
+    "user": "folkways-sync",
+    "credentialStoredOnHostOnly": true,
+    "timerEnabledAtInitialFileInstall": false
+  },
+  "filesMatchReviewedCommit": true,
+  "timerEnabled": "enabled",
+  "timerActive": "active",
+  "serviceResult": "success",
+  "sources": {
+    "IzakyL/folkways": {
+      "fingerprint": "8c5ad5067af59d88677fc4e5f1cee8cf1ae0dfc5cd191ae8e771ff08a28c15e8",
+      "sequence": 114001,
+      "commit": "2146c0912b7944c50878cf3264809fa992619a80",
+      "releaseId": 422239628
+    },
+    "davisye/folkways": {
+      "fingerprint": "6144b60e35a0e4350c8d8a4deba280ce588b4e78df0f45d6420509b37371beb0",
+      "sequence": 14001,
+      "commit": "026e5edfca96eace22f91c42c216f6bd20af320f",
+      "releaseId": 422512230
+    }
+  },
+  "lastResults": {
+    "IzakyL/folkways": "unchanged",
+    "davisye/folkways": "unchanged"
+  },
+  "lastRun": 1792823063,
+  "pendingJournal": false,
+  "backupCount": 0,
+  "mainCommit": "98c95837f35c13197dfb64ae2946dbc614d99c4f",
+  "pullRequest": "https://github.com/davisye/update-folkways/pull/9",
+  "ciRun": "https://github.com/davisye/update-folkways/actions/runs/40069884146",
+  "ciConclusion": "success",
+  "focusedTests": 28,
+  "repeatWasNoOp": true,
+  "storageModifiedUnchangedOnRepeat": true,
+  "limits": {
+    "onlyNightly": true,
+    "jarFilesUploaded": false,
+    "fullJarHashVerifiedByScheduledProbe": false,
+    "independentUserGameModified": false,
+    "zeroUpstreamReplacementDowntimeGuaranteed": false
+  },
+  "lastScheduledRunVerifiedAt": "2026-10-24T06:45:10Z",
+  "scheduledRunResult": "success"
+}

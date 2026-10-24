@@ -105,3 +105,13 @@ OpenList 访客目录和跳转读回证明外链分发路径可用，不证明�
 - 断电、磁盘故障与多文件耐久性，不能由普通故障注入替代。
 
 验收日志只提交脱敏的必要证据，不包含本机路径、SSH/生产配置、令牌、启动器会话、世界或玩家数据。
+
+## OpenList 主机侧 nightly 同步
+
+2026-10-24，两平台 CI 通过的 [PR #9](https://github.com/davisye/update-folkways/pull/9) 已部署到 sz：专用账号、systemd 凭据及每次完成后十分钟调度生效。真实 dry-run 和首次 execute 均通过；重复 execute 两源均返回 unchanged，OpenList modified 与目录内容保持不变，无恢复 journal。仅同步两个 nightly 外链，未上传 JAR；Range 探针不等于全文件哈希验证，也不保证上游替换窗口零 404。[脱敏部署记录](acceptance/2026-10-24-openlist-sync.json) 保存精确代码摘要、提交和范围。
+
+## GitHub API 镜像、切源与一次性接管
+
+2026-10-24 的 Windows / Java 21 完整候选构建通过：178 项 Java 测试，177 通过、1 项因测试卷没有 8.3 根路径别名跳过。新增测试验证 API 双路故障切换、绑定配置快照的接管授权、检查合并与旧请求撤销、原包备份，以及未知 JAR 内嵌 Folkways 的拒绝。独立复审无剩余 P1/P2。
+
+使用正式 Java Transport 并主动阻断 `api.github.com` 直连，更新器及两源 Folkways 的真实 Release JSON 均经 `github.davisye.cn/_github/api.github.com/` 成功取得；此项证明元数据镜像路由，完整包校验另由核心测试覆盖。真实隔离 NeoForge 21.1.233 客户端打开配置工厂，基础、高级和接管确认页布局检查通过；本地模式禁用接管，确认页列出源/频道/模块，取消不保存也不排队。该 UI 场景没有执行网络安装或验证实际用户存档升级。[脱敏候选验收记录](acceptance/2026-10-24-client-mirror-takeover.json) 保留实际范围。

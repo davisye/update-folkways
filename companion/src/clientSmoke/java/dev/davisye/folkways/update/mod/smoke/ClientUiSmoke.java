@@ -22,6 +22,7 @@ import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
@@ -57,9 +58,12 @@ public final class ClientUiSmoke {
     private static int frameCount;
     private static long checkDeadline;
     private static long captureAfter;
+    private static byte[] beforeTakeoverConfig;
+    private static String beforeTakeoverStatus;
     private static Phase phase = Phase.WAITING_FOR_TITLE;
 
-    private enum Phase { WAITING_FOR_TITLE, REQUEST_CHECK, WAITING_FOR_CHECK, BASIC_CAPTURE, ADVANCED_CAPTURE, COMPLETE }
+    private enum Phase { WAITING_FOR_TITLE, REQUEST_CHECK, WAITING_FOR_CHECK, BASIC_CAPTURE, ADVANCED_CAPTURE,
+        TAKEOVER_CONFIRM_CAPTURE, COMPLETE }
 
     private ClientUiSmoke() {}
 
@@ -113,10 +117,13 @@ public final class ClientUiSmoke {
     /** 截取已完成渲染的 framebuffer；写完文件后才退出，避免异步截图丢失。 */
     @SubscribeEvent
     public static void afterFrame(RenderFrameEvent.Post event) {
-        if (!enabled || finished || (phase != Phase.BASIC_CAPTURE && phase != Phase.ADVANCED_CAPTURE)) return;
+        if (!enabled || finished || (phase != Phase.BASIC_CAPTURE && phase != Phase.ADVANCED_CAPTURE
+                && phase != Phase.TAKEOVER_CONFIRM_CAPTURE)) return;
         Minecraft mc = Minecraft.getInstance();
         try {
-            requireConfigScreen(mc);
+            if (phase == Phase.TAKEOVER_CONFIRM_CAPTURE)
+                require(mc.screen instanceof ConfirmScreen, "接管入口没有打开独立确认页面");
+            else requireConfigScreen(mc);
             if (System.nanoTime() < captureAfter) return;
             if (mc.getOverlay() != null || ++frameCount < 3) return;
             if (phase == Phase.BASIC_CAPTURE) {
@@ -129,8 +136,39 @@ public final class ClientUiSmoke {
             } else if (phase == Phase.ADVANCED_CAPTURE) {
                 RESULT.put("advancedLayout", checkBounds(mc.screen));
                 button(mc.screen, "back_basic");
+                require(!button(mc.screen, "takeover").active, "本地开发开启时仍能接管 Folkways");
+                RESULT.put("takeoverDisabledInLocalMode", true);
                 capture(mc, "config-advanced.png");
                 click(mc.screen, "back_basic");
+                // 仅改草稿以打开确认页；不保存 false，不执行接管，也不请求真实下载。
+                click(mc.screen, "local");
+                click(mc.screen, "more");
+                require(button(mc.screen, "takeover").active, "关闭本地开发草稿后没有显式接管入口");
+                beforeTakeoverConfig = Files.readAllBytes(game.resolve(".folkways-updater/config.json"));
+                beforeTakeoverStatus = ClientUpdates.status().getString();
+                require(!ClientUpdates.checking(), "确认取消验收前仍有后台检查");
+                click(mc.screen, "takeover");
+                require(mc.screen instanceof ConfirmScreen, "接管没有要求一次性确认");
+                String confirmation = mc.screen.getNarrationMessage().getString();
+                require(confirmation.contains(expectedRepository) && confirmation.contains("nightly")
+                        && confirmation.contains("core, vanilla") && confirmation.contains("create")
+                        && confirmation.contains("modulargolems") && confirmation.contains("cookery"),
+                        "接管确认没有绑定来源、频道和完整模块");
+                RESULT.put("takeoverConfirmationNamesSelection", true);
+                phase = Phase.TAKEOVER_CONFIRM_CAPTURE;
+                frameCount = 0;
+            } else if (phase == Phase.TAKEOVER_CONFIRM_CAPTURE) {
+                RESULT.put("takeoverConfirmationLayout", checkBounds(mc.screen));
+                capture(mc, "config-takeover-confirm.png");
+                click(mc.screen, "takeover_cancel");
+                requireConfigScreen(mc);
+                require(java.util.Arrays.equals(beforeTakeoverConfig,
+                        Files.readAllBytes(game.resolve(".folkways-updater/config.json"))), "取消接管写入了草稿配置");
+                require(!ClientUpdates.checking() && beforeTakeoverStatus.equals(ClientUpdates.status().getString()),
+                        "取消接管仍安排了检查");
+                RESULT.put("takeoverCancelDoesNotSaveOrQueue", true);
+                click(mc.screen, "back_basic");
+                click(mc.screen, "local");
                 button(mc.screen, "repository");
                 verifySaved();
                 click(mc.screen, "back");
@@ -211,6 +249,8 @@ public final class ClientUiSmoke {
         if (phase == Phase.REQUEST_CHECK) {
             if (ClientUpdates.checking() || !button(mc.screen, "check").active) return;
             click(mc.screen, "check");
+            require(button(mc.screen, "check").active, "后台检查期间不能保存并安排最新选择");
+            RESULT.put("saveAndCheckRemainsAvailableWhileBusy", true);
             // 等待“请求已提交”的四秒反馈消失，让截图包含独立检查结果。
             captureAfter = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(4200);
             RESULT.put("checkButtonClickedInLocalMode", true);
@@ -226,6 +266,8 @@ public final class ClientUiSmoke {
         RESULT.put("independentSelfCheckCompleted", true);
         RESULT.put("selfCheckHasNoInstalledJarTarget", true);
         RESULT.put("folkwaysCheckSkippedInLocalMode", true);
+        require(status.contains(expectedRepository) && status.contains("nightly"), "结果没有标明本轮实际来源");
+        RESULT.put("checkResultNamesSelectedSource", true);
         RESULT.put("checkStatus", status);
         phase = Phase.BASIC_CAPTURE;
         frameCount = 0;
@@ -329,7 +371,8 @@ public final class ClientUiSmoke {
         RESULT.put("passed", passed);
         RESULT.put("phase", phase.name());
         RESULT.put("elapsedMillis", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-        if (passed) RESULT.put("screenshots", List.of("screenshots/config-basic.png", "screenshots/config-advanced.png"));
+        if (passed) RESULT.put("screenshots", List.of("screenshots/config-basic.png", "screenshots/config-advanced.png",
+                "screenshots/config-takeover-confirm.png"));
         if (error != null) {
             RESULT.put("errorType", error.getClass().getSimpleName());
             String message = String.valueOf(error.getMessage());

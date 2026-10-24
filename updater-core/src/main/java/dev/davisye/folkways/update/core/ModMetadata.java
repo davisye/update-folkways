@@ -14,10 +14,10 @@ final class ModMetadata {
     final List<Bundle> bundles = new ArrayList<>();
     String loader;
     static final class Dependency { String owner, id, range; }
-    static final class Bundle { String id, version, range; final Map<String,String> mods = new TreeMap<>(); }
+    static final class Bundle { String id, version, range, sha256; long size; final Map<String,String> mods = new TreeMap<>(); }
     private static final Pattern ASSIGN = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*([\"'])(.*?)\\2\\s*(?:#.*)?");
 
-    static ModMetadata read(byte[] jar) throws Exception { return read(jar, 0, new long[2]); }
+    static ModMetadata read(byte[] jar) throws Exception { return read(jar, 0, new long[2], true); }
     static ModMetadata installedWithDependencies(java.nio.file.Path path) throws Exception {
         if (java.nio.file.Files.size(path) > 64L * 1024 * 1024) throw new IOException("Required Mod exceeds the installation size limit");
         try (InputStream input = java.nio.file.Files.newInputStream(path)) {
@@ -30,7 +30,7 @@ final class ModMetadata {
         ModMetadata result = new ModMetadata();
         try (ZipFile zip = new ZipFile(path.toFile())) {
             ZipEntry entry = zip.getEntry("META-INF/neoforge.mods.toml"); if (entry == null) entry = zip.getEntry("META-INF/mods.toml");
-            if (entry == null) return result;
+            if (entry == null) { installedNestedIdentities(zip, result); return result; }
             byte[] toml; try (InputStream input = zip.getInputStream(entry)) { toml = input.readNBytes(1024 * 1024 + 1); }
             if (toml.length > 1024 * 1024) throw new IOException("Installed Mod metadata exceeds limit");
             String version = null; ZipEntry manifest = zip.getEntry("META-INF/MANIFEST.MF");
@@ -39,19 +39,45 @@ final class ModMetadata {
                 version = new Manifest(new ByteArrayInputStream(bytes)).getMainAttributes().getValue("Implementation-Version");
             }
             result.parse(new String(toml, StandardCharsets.UTF_8), version, false);
+            installedNestedIdentities(zip, result);
         }
         return result;
     }
-    private static ModMetadata read(byte[] jar, int depth, long[] budget) throws Exception {
+    private static void installedNestedIdentities(ZipFile zip, ModMetadata result) throws Exception {
+        ZipEntry entry = zip.getEntry("META-INF/jarjar/metadata.json"); if (entry == null) return;
+        byte[] bytes; try (InputStream input = zip.getInputStream(entry)) { bytes = input.readNBytes(1024 * 1024 + 1); }
+        if (bytes.length > 1024 * 1024) throw new IOException("Installed JarJar metadata exceeds limit");
+        var root = com.google.gson.JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (!root.has("jars") || root.getAsJsonArray("jars").size() > 64) throw new IOException("Invalid installed JarJar catalogue");
+        long[] budget = new long[2];
+        for (var declaration : root.getAsJsonArray("jars")) {
+            String path = declaration.getAsJsonObject().get("path").getAsString();
+            if (!path.matches("META-INF/jarjar/[A-Za-z0-9._+\\-]+\\.jar")) throw new IOException("Invalid installed nested Mod path");
+            ZipEntry child = zip.getEntry(path); if (child == null || child.getSize() > 16 * 1024 * 1024) throw new IOException("Installed nested Mod exceeds limit or is missing");
+            byte[] nested; try (InputStream input = zip.getInputStream(child)) { nested = input.readNBytes(16 * 1024 * 1024 + 1); }
+            if (nested.length > 16 * 1024 * 1024) throw new IOException("Installed nested Mod exceeds limit");
+            ModMetadata identity = read(nested, 1, budget, false);
+            identity.mods.forEach((id, version) -> result.provided.merge(id, version, ModMetadata::higher));
+            identity.provided.forEach((id, version) -> result.provided.merge(id, version, ModMetadata::higher));
+        }
+    }
+    private static ModMetadata read(byte[] jar, int depth, long[] budget, boolean dependencies) throws Exception {
         if (depth > 3) throw new IOException("Nested Mod metadata exceeds depth limit");
         Map<String,byte[]> relevant = new LinkedHashMap<>(); String version = null;
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(jar))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 if (++budget[0] > 75000) throw new IOException("Mod archive has too many entries");
+                String name = entry.getName();
+                boolean useful = name.equals("META-INF/MANIFEST.MF") || name.equals("META-INF/neoforge.mods.toml") || name.equals("META-INF/mods.toml")
+                    || name.equals("META-INF/jarjar/metadata.json") || name.matches("META-INF/jarjar/[A-Za-z0-9._+\\-]+\\.jar");
+                if (!dependencies && !useful) {
+                    byte[] buffer = new byte[8192]; int length;
+                    while ((length = zip.read(buffer)) != -1) { budget[1] += length; if (budget[1] > 384L * 1024 * 1024) throw new IOException("Nested archive expands beyond limits"); }
+                    continue;
+                }
                 byte[] bytes = zip.readNBytes(16 * 1024 * 1024 + 1); budget[1] += bytes.length;
                 if (bytes.length > 16 * 1024 * 1024 || budget[1] > 384L * 1024 * 1024) throw new IOException("Mod archive expands beyond limits");
-                String name = entry.getName();
                 if (name.equals("META-INF/MANIFEST.MF")) version = new Manifest(new ByteArrayInputStream(bytes)).getMainAttributes().getValue("Implementation-Version");
                 if (name.equals("META-INF/neoforge.mods.toml") || name.equals("META-INF/mods.toml") || name.equals("META-INF/jarjar/metadata.json")
                     || name.matches("META-INF/jarjar/[A-Za-z0-9._+\\-]+\\.jar")) {
@@ -63,7 +89,7 @@ final class ModMetadata {
         byte[] toml = relevant.getOrDefault("META-INF/neoforge.mods.toml", relevant.get("META-INF/mods.toml"));
         if (toml != null) {
             if (toml.length > 1024 * 1024) throw new IOException("Mod TOML exceeds limit");
-            result.parse(new String(toml, StandardCharsets.UTF_8), version);
+            result.parse(new String(toml, StandardCharsets.UTF_8), version, dependencies);
         }
         byte[] jarjar = relevant.get("META-INF/jarjar/metadata.json");
         if (jarjar != null) {
@@ -84,8 +110,11 @@ final class ModMetadata {
                     result.bundles.add(bundle);
                     declared = bundle;
                 }
-                ModMetadata nested = read(relevant.get(path), depth + 1, budget);
-                if (declared != null) declared.mods.putAll(nested.mods);
+                ModMetadata nested = read(relevant.get(path), depth + 1, budget, dependencies);
+                if (declared != null) {
+                    declared.mods.putAll(nested.mods); declared.size = relevant.get(path).length;
+                    declared.sha256 = Updater.sha(relevant.get(path));
+                }
                 for (var mod : nested.mods.entrySet()) result.provided.merge(mod.getKey(), mod.getValue(), ModMetadata::higher);
                 for (var mod : nested.provided.entrySet()) result.provided.merge(mod.getKey(), mod.getValue(), ModMetadata::higher);
                 result.required.addAll(nested.required);

@@ -104,7 +104,7 @@ class TransportProxyTest {
                 return response(request, selected == 0 ? 302 : 200, "text/html", new byte[]{1}, "https://example.invalid/");
             }, reads);
             assertThrows(IOException.class, () -> t.fetchOfficialApi(API, 1));
-            assertEquals(1, reads.get()); assertEquals(2, sends.get());
+            assertEquals(2, reads.get()); assertEquals(4, sends.get());
         }
     }
     @Test void fallbackBytesStillPassThroughTheOriginalDigestValidator() {
@@ -119,9 +119,12 @@ class TransportProxyTest {
     @Test void interruptionAndUnapprovedHostsDoNotReadSystemSettings() {
         AtomicInteger reads = new AtomicInteger(), sends = new AtomicInteger();
         Transport t = transport((request, maximum, proxy) -> { sends.incrementAndGet(); throw new InterruptedException(); }, reads);
-        assertThrows(InterruptedException.class, () -> t.fetchOfficialApi(API, 1));
-        assertThrows(IOException.class, () -> t.fetch("https://example.invalid/unapproved", 1));
-        assertEquals(1, sends.get()); assertEquals(0, reads.get());
+        try {
+            assertThrows(InterruptedException.class, () -> t.fetchOfficialApi(API, 1));
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertThrows(IOException.class, () -> t.fetch("https://example.invalid/unapproved", 1));
+            assertEquals(1, sends.get()); assertEquals(0, reads.get());
+        } finally { Thread.interrupted(); }
     }
     @Test void tlsTrustFailuresAndUnclassifiedIoDoNotTryAnotherProxy() {
         for (IOException failure : List.of(new javax.net.ssl.SSLHandshakeException("Untrusted certificate"),

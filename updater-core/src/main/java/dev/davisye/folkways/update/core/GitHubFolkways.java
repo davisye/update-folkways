@@ -18,7 +18,13 @@ final class GitHubFolkways {
     }
     private final Updater u;
     private final ApprovedDependencies.Catalog catalog;
-    GitHubFolkways(Updater updater) { u = updater; catalog = updater.approvedDependencies == null ? ApprovedDependencies.PRODUCTION : updater.approvedDependencies; }
+    private final java.util.function.BooleanSupplier stillCurrent;
+    private final Updater.CommitAuthorization authorization;
+    GitHubFolkways(Updater updater) { this(updater, () -> true, Updater.PendingCommit::run); }
+    GitHubFolkways(Updater updater, java.util.function.BooleanSupplier stillCurrent, Updater.CommitAuthorization authorization) {
+        u = updater; catalog = updater.approvedDependencies == null ? ApprovedDependencies.PRODUCTION : updater.approvedDependencies;
+        this.stillCurrent = stillCurrent; this.authorization = authorization;
+    }
     private Source source(Config config) {
         if (u.githubSource != null) return u.githubSource;
         Transport transport = new Transport(config);
@@ -32,16 +38,20 @@ final class GitHubFolkways {
             }
         };
     }
-    String checkAndStage(Config config) throws Exception {
+    String checkAndStage(Config config) throws Exception { return checkAndStage(config, false); }
+    String checkAndStage(Config config, boolean takeOverExisting) throws Exception {
         if (u.loaderVersion == null) return "Official Folkways checks require the current NeoForge version; use the in-game updater";
         return u.locked(() -> {
             managed(config); rejectOtherJournal();
             if (Files.exists(u.home.resolve(JOURNAL))) throw new IOException("An interrupted Folkways installation must recover after the game exits");
-            State before = state(); Map<String,Present> installed = scan();
-            if (before.owned.isEmpty()) {
-                if (installed.keySet().stream().anyMatch(GitHubFolkways::folkways)) return "Existing Folkways JARs are protected; automatic installation only starts from an empty Folkways set";
+            State recorded = state(); Map<String,Present> installed = scan();
+            if (recorded.owned.isEmpty()) {
+                if (!takeOverExisting && installed.keySet().stream().anyMatch(GitHubFolkways::folkways)) return "Existing Folkways JARs are protected; automatic installation only starts from an empty Folkways set";
                 if (legacyOwned()) return "Existing signed-channel ownership is protected; restore its manifest or migrate explicitly";
             }
+            if (takeOverExisting && legacyOwned()) return "Existing signed-channel ownership is protected; restore its manifest or migrate explicitly";
+            State before = takeOverExisting ? takeoverBaseline(recorded, installed, config) : recorded;
+            Set<String> takenOver = new TreeSet<>(before.owned.keySet()); takenOver.removeAll(recorded.owned.keySet());
             validateOwned(before, installed); restorePending(before);
             Source source = source(config); Release release = release(source, config);
             if (release == null) return "No official " + config.channel + " Folkways release is available in " + config.repository;
@@ -53,13 +63,13 @@ final class GitHubFolkways {
             long sequence = sequence(run); String fingerprint = fingerprint(release);
             long accepted = before.highWater.getOrDefault(config.scope(), 0L);
             if (sequence < accepted || sequence == accepted && !fingerprint.equals(before.accepted.get(config.scope()))) throw new IOException("Official release is older or changed within the same CI build");
-            if (sequence == accepted && config.scope().equals(before.scope) && currentSelection(before, config)
+            if (takenOver.isEmpty() && sequence == accepted && config.scope().equals(before.scope) && currentSelection(before, config)
                 && existingClosureComplete(before, installed, config)) return "Already installed official Folkways " + commit.sha;
             if (before.pending != null) {
                 try {
                     Plan old = pending(before, false);
                     if (sameScope(old, config) && old.sequence > sequence) throw new IOException("A newer Folkways build is already queued");
-                    if (sameScope(old, config) && old.sequence == sequence && old.fingerprint.equals(fingerprint)) return "Official Folkways is already downloaded; installs after this game JVM exits";
+                    if (takenOver.isEmpty() && sameScope(old, config) && old.sequence == sequence && old.fingerprint.equals(fingerprint)) return "Official Folkways is already downloaded; installs after this game JVM exits; commit " + old.commit;
                 } catch (DifferentSelection ignored) { }
             }
             Plan plan = new Plan(); plan.schema = 1; plan.repository = config.repository; plan.minecraft = config.minecraft; plan.channel = config.channel;
@@ -80,24 +90,38 @@ final class GitHubFolkways {
             resolver.resolve(source, config, before, bytes);
             Release finalRelease = release(source, config); releaseAssets(finalRelease, config);
             if (!fingerprint.equals(fingerprint(finalRelease))) throw new IOException("Official release changed while downloading; previous files were retained");
-            validatePlan(plan, config); managed(config); validateOwned(state(), scan());
+            validatePlan(plan, config); managed(config); validateBaseline(recorded, before);
             Path candidate = u.home.resolve("github-folkways-candidate"); u.clear(candidate); u.directory(candidate);
             try {
                 for (File item : plan.files) Updater.atomic(candidate.resolve(item.id + ".jar"), bytes.get(item.id));
                 byte[] planBytes = json(plan); Updater.atomic(candidate.resolve("plan.json"), planBytes);
-                managed(config); validateOwned(state(), scan());
+                managed(config); validateBaseline(recorded, before);
                 Path queued = u.home.resolve(PENDING), previous = u.home.resolve(PENDING + ".previous");
                 if (Files.exists(previous)) throw new IOException("Unresolved previous Folkways cache");
                 if (Files.exists(queued)) Files.move(queued, previous, StandardCopyOption.ATOMIC_MOVE);
+                boolean moved = false; boolean[] committed = {false};
                 try {
-                    managed(config); Files.move(candidate, queued, StandardCopyOption.ATOMIC_MOVE);
-                    before.pending = Updater.sha(planBytes); save(before);
+                    managed(config); validateBaseline(recorded, before); Files.move(candidate, queued, StandardCopyOption.ATOMIC_MOVE); moved = true;
+                    managed(config); validateBaseline(recorded, before);
+                    String pendingHash = Updater.sha(planBytes);
+                    authorization.commit(() -> {
+                        // The caller serializes this short consent-consumption point with request cancellation.
+                        // Downloads and Mod archive scans have already completed outside that caller lock.
+                        managed(config); validateRecordedState(recorded);
+                        State acceptedState = decode(json(before), State.class); acceptedState.pending = pendingHash; save(acceptedState); committed[0] = true;
+                    });
+                    if (!committed[0]) throw new IOException("Updater commit was not authorized; ownership was retained");
                 } catch (Exception e) {
-                    if (Files.exists(previous)) { u.clear(queued); Files.move(previous, queued, StandardCopyOption.ATOMIC_MOVE); } throw e;
+                    if (!committed[0]) {
+                        if (moved) u.clear(queued);
+                        if (Files.exists(previous)) Files.move(previous, queued, StandardCopyOption.ATOMIC_MOVE);
+                    }
+                    throw e;
                 }
                 u.clear(previous);
             } finally { u.clear(candidate); }
-            return "Downloaded official Folkways " + config.modules + (plan.libraries.isEmpty() ? "" : " + required dependencies " + plan.libraries.keySet()) + "; installs after the game JVM exits";
+            return "Downloaded official Folkways " + config.modules + (plan.libraries.isEmpty() ? "" : " + required dependencies " + plan.libraries.keySet())
+                + (takenOver.isEmpty() ? "" : "; one-time takeover staged for " + takenOver) + "; installs after the game JVM exits; commit " + plan.commit;
         });
     }
 
@@ -191,6 +215,7 @@ final class GitHubFolkways {
         for (String file : List.of("journal.json", "self-journal.json", "dropin-journal.json")) { u.safe(u.home.resolve(file)); if (Files.exists(u.home.resolve(file))) throw new IOException("Another updater transaction requires recovery before Folkways installation"); }
     }
     private void managed(Config expected) throws IOException {
+        if (!stillCurrent.getAsBoolean()) throw new IOException("Updater check request was superseded; current files and ownership were retained");
         Config now = Config.load(u.game);
         if (now.isLocalDevelopment(u.game) || !now.manifestUrl.isBlank() || !now.scope().equals(expected.scope()) || !now.modules.equals(expected.modules)
             || !now.networkPolicy.equals(expected.networkPolicy) || !Objects.equals(now.regionHint, expected.regionHint)) throw new IOException("Local mode or updater configuration changed; current files were retained");
@@ -228,11 +253,13 @@ final class GitHubFolkways {
                 for (var mod : info.mods.entrySet()) {
                     Present value = present(path, mod.getValue(), info, false, fromFolkways);
                     Present previous = result.get(mod.getKey());
+                    if (previous != null && previous.nested && folkways(mod.getKey())) throw new TakeoverRejectedException(mod.getKey(), TakeoverRejectedException.Reason.COMPOSITE_OR_NESTED);
                     if (previous != null && !previous.nested) throw new IOException("Duplicate installed Mod: " + mod.getKey());
                     result.put(mod.getKey(), value);
                 }
                 if (!fromFolkways) for (var mod : info.provided.entrySet()) {
                     Present value = present(path, mod.getValue(), info, true, false), previous = result.get(mod.getKey());
+                    if (previous != null && !previous.nested && folkways(mod.getKey())) throw new TakeoverRejectedException(mod.getKey(), TakeoverRejectedException.Reason.COMPOSITE_OR_NESTED);
                     if (previous == null || previous.nested && ModMetadata.compare(value.version, previous.version) > 0) result.put(mod.getKey(), value);
                 }
             }
@@ -313,8 +340,12 @@ final class GitHubFolkways {
             for (ModMetadata info : metadata) for (var bundle : info.bundles) for (var mod : bundle.mods.entrySet()) {
                 Present actual = installed.get(mod.getKey());
                 if (actual != null && !actual.nested && !actual.fromFolkways) {
-                    if (!bundle.version.equals(mod.getValue())) throw new IOException("Cannot prove the version of a top-level bundled-library override: " + mod.getKey());
-                    if (!ModMetadata.matches(actual.version, bundle.range)) throw new DependencyConflictException(mod.getKey(), actual.version, bundle.range);
+                    String artifactVersion = actual.version;
+                    if (!bundle.version.equals(mod.getValue())) {
+                        artifactVersion = provenArtifactVersion(actual, mod.getKey(), bundle.id);
+                        if (artifactVersion == null) throw new UnverifiedBundleException(mod.getKey(), actual.version);
+                    }
+                    if (!ModMetadata.matches(artifactVersion, bundle.range)) throw new DependencyConflictException(mod.getKey(), actual.version, bundle.range);
                 }
             }
             for (var dependency : requirements) if (!platform(dependency)) {
@@ -323,6 +354,17 @@ final class GitHubFolkways {
                 for (String version : versions) if (!ModMetadata.matches(version, dependency.range)) throw new DependencyConflictException(dependency.id, version, dependency.range);
             }
             return true;
+        }
+        String provenArtifactVersion(Present actual, String id, String identifier) throws IOException {
+            String proven = null;
+            for (ModMetadata info : metadata) for (var candidate : info.bundles) {
+                if (identifier.equals(candidate.id) && actual.version.equals(candidate.mods.get(id)) && actual.size == candidate.size
+                    && actual.sha256 != null && actual.sha256.equals(candidate.sha256) && actual.metadata.mods.equals(candidate.mods)) {
+                    if (proven != null && !proven.equals(candidate.version)) throw new IOException("Ambiguous artifact identity for an installed bundled library");
+                    proven = candidate.version;
+                }
+            }
+            return proven;
         }
         void useExisting(String id, Present external, State before) throws Exception {
             if (!usedExisting.add(external.file)) return;
@@ -342,10 +384,36 @@ final class GitHubFolkways {
     }
     private void validateOwned(State state, Map<String,Present> installed) throws Exception {
         for (String id : installed.keySet()) if (folkways(id) && !state.owned.containsKey(id)) throw new IOException("Existing Folkways JAR is not owned by this updater; local/manual files will not be replaced");
+        validateOwnedHashes(state, installed);
+    }
+    private void validateOwnedHashes(State state, Map<String,Present> installed) throws Exception {
         for (var item : state.owned.entrySet()) {
             Present actual = installed.get(item.getKey()); Owned expected = item.getValue();
             if (actual == null || !expected.file.equals(actual.file) || !expected.sha256.equals(actual.sha256) || expected.size != actual.size) throw new IOException("Local or manual changes protect " + item.getKey() + "; no files were replaced");
         }
+    }
+    private State takeoverBaseline(State recorded, Map<String,Present> installed, Config config) throws Exception {
+        // Explicit consent can add previously unowned files; it never resets an existing ownership hash.
+        validateOwnedHashes(recorded, installed); State baseline = decode(json(recorded), State.class);
+        for (var entry : installed.entrySet()) {
+            String id = entry.getKey(); if (!folkways(id) || recorded.owned.containsKey(id)) continue;
+            if (!config.modules.contains(id.substring(9))) throw new TakeoverRejectedException(id, TakeoverRejectedException.Reason.UNSELECTED_MODULE);
+            Present present = entry.getValue(); Path path = u.mods.resolve(present.file); u.safe(path); Updater.fileName(present.file);
+            if (present.nested || !present.fromFolkways) throw new TakeoverRejectedException(id, TakeoverRejectedException.Reason.COMPOSITE_OR_NESTED);
+            byte[] bytes = u.readBounded(path, LIMIT); Updater.verify(bytes, present.sha256, present.size); ModMetadata metadata = ModMetadata.read(bytes);
+            if (present.nested || !present.fromFolkways || !"javafml".equals(metadata.loader) || !metadata.mods.keySet().equals(Set.of(id)) || metadata.provided.keySet().stream().anyMatch(GitHubFolkways::folkways))
+                throw new TakeoverRejectedException(id, TakeoverRejectedException.Reason.COMPOSITE_OR_NESTED);
+            Updater.validateJar(bytes, id.substring(9));
+            baseline.owned.put(id, new Owned(present.file, present.sha256, present.size, metadata.mods.get(id)));
+        }
+        validateState(baseline); return baseline;
+    }
+    private void validateBaseline(State recorded, State baseline) throws Exception {
+        validateRecordedState(recorded);
+        validateOwned(baseline, scan());
+    }
+    private void validateRecordedState(State recorded) throws Exception {
+        if (!Updater.JSON.toJson(state()).equals(Updater.JSON.toJson(recorded))) throw new IOException("Folkways ownership changed while verifying the update");
     }
     private static boolean currentSelection(State state, Config config) {
         Set<String> modules = new TreeSet<>(); for (String id : state.owned.keySet()) if (folkways(id)) modules.add(id.substring(9));

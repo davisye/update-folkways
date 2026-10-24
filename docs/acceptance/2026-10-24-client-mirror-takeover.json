@@ -1,0 +1,92 @@
+{
+  "checkedAt": "2026-10-24T06:47:51.920127+00:00",
+  "scope": "Local Windows Java 21 candidate build and isolated fixtures",
+  "build": {
+    "successful": true,
+    "javaTests": 178,
+    "passed": 177,
+    "skipped": 1,
+    "failures": 0,
+    "skipReason": "Windows test volume has no 8.3 root alias"
+  },
+  "focusedTests": {
+    "apiRoutes": 8,
+    "transportProxy": 11,
+    "takeover": 16,
+    "latestRequestQueue": 9,
+    "requestSnapshot": 7
+  },
+  "apiMirror": {
+    "requests": [
+      "https://github.davisye.cn/_github/api.github.com/repos/davisye/update-folkways/releases/tags/nightly",
+      "https://github.davisye.cn/_github/api.github.com/repos/IzakyL/folkways/releases/tags/nightly",
+      "https://github.davisye.cn/_github/api.github.com/repos/davisye/folkways/releases/tags/nightly"
+    ],
+    "results": [
+      {
+        "repository": "davisye/update-folkways",
+        "releaseId": 421823415,
+        "bytes": 4177,
+        "commit": "98c95837f35c13197dfb64ae2946dbc614d99c4f"
+      },
+      {
+        "repository": "IzakyL/folkways",
+        "releaseId": 422239628,
+        "bytes": 10737,
+        "commit": "2146c0912b7944c50878cf3264809fa992619a80"
+      },
+      {
+        "repository": "davisye/folkways",
+        "releaseId": 422512230,
+        "bytes": 11353,
+        "commit": "026e5edfca96eace22f91c42c216f6bd20af320f"
+      }
+    ],
+    "directApiBlockedByFixture": true,
+    "allMetadataFetchedFromConfiguredMirror": true
+  },
+  "minecraftUi": {
+    "started": true,
+    "factoryRegistered": true,
+    "missingOptionalPrerequisitesSelectable": true,
+    "allMissingPrerequisiteModulesClicked": true,
+    "repositoryClicked": true,
+    "localClicked": true,
+    "allOptionalModulesSavedWithoutPrerequisites": true,
+    "saved": true,
+    "hiddenEditsPreserved": true,
+    "localModeMatchesBoolean": true,
+    "legacyMarkerIgnoredWhenDisabled": true,
+    "explicitLocalModeEnabled": true,
+    "saveAndCheckRemainsAvailableWhileBusy": true,
+    "checkButtonClickedInLocalMode": true,
+    "independentSelfCheckCompleted": true,
+    "selfCheckHasNoInstalledJarTarget": true,
+    "folkwaysCheckSkippedInLocalMode": true,
+    "checkResultNamesSelectedSource": true,
+    "takeoverDisabledInLocalMode": true,
+    "takeoverConfirmationNamesSelection": true,
+    "takeoverCancelDoesNotSaveOrQueue": true,
+    "factoryBackClosesToParent": true,
+    "passed": true,
+    "phase": "COMPLETE",
+    "screenshots": [
+      "screenshots/config-basic.png",
+      "screenshots/config-advanced.png",
+      "screenshots/config-takeover-confirm.png"
+    ]
+  },
+  "independentReview": {
+    "remainingP1P2": 0,
+    "nestedUnownedFolkwaysRejected": true,
+    "manualDependencyPreserved": true,
+    "revokedCommitDoesNotPersistOwnership": true
+  },
+  "limits": {
+    "uiSmokePerformsNoNetworkInstallation": true,
+    "takeoverBehaviorUsesIsolatedCoreFixtures": true,
+    "userGameInstanceModified": false,
+    "productionServiceChangedByClientTests": false,
+    "fullMinecraftWorldUpgradeVerified": false
+  }
+}
