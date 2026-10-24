@@ -1,0 +1,13 @@
+[Unit]
+Description=Refresh Folkways OpenList nightly links every ten minutes
+Documentation=https://github.com/davisye/update-folkways/blob/main/docs/openlist-sync.md
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+RandomizedDelaySec=30s
+AccuracySec=1s
+Unit=folkways-nightly-sync.service
+
+[Install]
+WantedBy=timers.target
