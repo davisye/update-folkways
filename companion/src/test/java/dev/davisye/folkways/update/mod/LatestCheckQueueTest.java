@@ -130,4 +130,43 @@ class LatestCheckQueueTest {
         ref.set(queue); queue.request("old"); tasks.remove().run(); tasks.remove().run();
         assertEquals(List.of("new"), committed);
     }
+    @Test void aRevokedCompletedResultCannotConsumeReminderHistory() throws Exception {
+        var tasks = new ArrayDeque<Runnable>();
+        var ticket = new AtomicReference<LatestCheckQueue.Ticket>();
+        var queue = new LatestCheckQueue<String, String>(tasks::add, (settings, current) -> {
+            ticket.set(current); return settings;
+        }, ignored -> {}, ignored -> {});
+        queue.request("old"); tasks.remove().run();
+        LatestCheckQueue.Ticket completed = ticket.get();
+        queue.request("new");
+        var history = new ArrayList<String>();
+        assertThrows(IllegalStateException.class, () -> completed.commit(() -> history.add("old")));
+        assertTrue(history.isEmpty());
+    }
+    @Test void displayingReminderAndRevokingRequestHaveOneLinearizationPoint() throws Exception {
+        var tasks = new ArrayDeque<Runnable>();
+        var ticket = new AtomicReference<LatestCheckQueue.Ticket>();
+        var queue = new LatestCheckQueue<String, String>(tasks::add, (settings, current) -> {
+            ticket.set(current); return settings;
+        }, ignored -> {}, ignored -> {});
+        queue.request("old"); tasks.remove().run();
+        var displaying = new CountDownLatch(1); var release = new CountDownLatch(1);
+        var requesting = new CountDownLatch(1); var revoked = new CountDownLatch(1);
+        var history = new ArrayList<String>();
+        try (var threads = Executors.newFixedThreadPool(2)) {
+            var display = threads.submit(() -> {
+                try { ticket.get().commit(() -> {
+                    displaying.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS)); history.add("old");
+                }); } catch (Exception error) { throw new RuntimeException(error); }
+            });
+            assertTrue(displaying.await(5, TimeUnit.SECONDS));
+            var request = threads.submit(() -> { requesting.countDown(); queue.invalidate(); revoked.countDown(); });
+            assertTrue(requesting.await(5, TimeUnit.SECONDS));
+            assertFalse(revoked.await(100, TimeUnit.MILLISECONDS));
+            release.countDown(); display.get(5, TimeUnit.SECONDS); request.get(5, TimeUnit.SECONDS);
+            assertEquals(List.of("old"), history);
+            assertFalse(ticket.get().getAsBoolean());
+        } finally { release.countDown(); }
+    }
+
 }

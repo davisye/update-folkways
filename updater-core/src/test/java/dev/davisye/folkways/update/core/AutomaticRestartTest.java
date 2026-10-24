@@ -56,6 +56,17 @@ class AutomaticRestartTest {
                     }
                 }
             }
+            // ProcessHandle may report termination just before Windows releases the redirected log handle.
+            // Bound the wait for this test-owned file instead of racing JUnit's recursive temp cleanup.
+            Path log = game.resolve("helper.log");
+            long releaseDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while (true) {
+                try { Files.deleteIfExists(log); break; }
+                catch (FileSystemException busy) {
+                    if (System.nanoTime() >= releaseDeadline) throw busy;
+                    Thread.sleep(25);
+                }
+            }
         }
     }
     @Test void completedSaveRestartsExactJavaArgumentsAndPreservesWorkingDirectoryOnce() throws Exception { run("normal", 2); }

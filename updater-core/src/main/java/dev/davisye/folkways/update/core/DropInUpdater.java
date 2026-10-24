@@ -121,14 +121,15 @@ public final class DropInUpdater {
             + ", self-update=" + config.selfUpdateEnabled + ", manual verification pending=" + unmanaged() + ", helper=" + helperAlive();
     }
     public boolean localProtection() throws Exception { return Config.load(u.game).isLocalDevelopment(u.game); }
-    public String checkAndStage() throws Exception {
+    public String checkAndStage() throws Exception { return checkAndStageResult().message(); }
+    public UpdateCheckResult checkAndStageResult() throws Exception {
         Config config = Config.load(u.game);
-        if (!config.selfUpdateEnabled) return "Updater self-update disabled";
+        if (!config.selfUpdateEnabled) return UpdateCheckResult.status("Updater self-update disabled");
         try { return u.locked(() -> {
             rejectLegacyTransaction();
             if (Files.exists(u.home.resolve(JOURNAL))) throw new IOException("An unfinished updater transaction requires exit recovery before checking updates");
             State state = state();
-            if (state.owned == null) return "Updater ownership not initialized";
+            if (state.owned == null) return UpdateCheckResult.status("Updater ownership not initialized");
             managed(config); Unmanaged observed = actual(state); restorePending(state);
             SelfUpdater.Source source = source(config);
             if (observed != null && SelfUpdater.publishedBuild(observed.build)) {
@@ -141,10 +142,10 @@ public final class DropInUpdater {
             SelfUpdater.Asset asset = selectedAsset(release);
             String digest = SelfUpdater.hashOf(asset);
             if (asset.size > LIMIT) throw new IOException("Updater asset exceeds limit");
-            if (observed == null && digest.equals(state.owned.sha256)) { cleanCommittedPending(state); return "Updater already current: " + state.build.version; }
+            if (observed == null && digest.equals(state.owned.sha256)) { cleanCommittedPending(state); return UpdateCheckResult.status("Updater already current: " + state.build.version); }
             if (state.pending != null) {
                 Proof previous = pending(state);
-                if (digest.equals(SelfUpdater.hashOf(previous.asset)) && sameObserved(observed, previous.observed)) return "Updater already downloaded; installs after the game JVM exits";
+                if (digest.equals(SelfUpdater.hashOf(previous.asset)) && sameObserved(observed, previous.observed)) return reminder("Updater already downloaded; installs after the game JVM exits", previous);
             }
             byte[] bytes = source.asset(asset.browser_download_url, asset.size, digest);
             Updater.verify(bytes, digest, asset.size);
@@ -181,8 +182,12 @@ public final class DropInUpdater {
                 }
                 u.clear(previous);
             } finally { u.clear(candidate); }
-            return "Updater downloaded: " + build.version + "; installs after the game JVM exits";
-        }); } catch (VerificationUnavailable e) { return "Updater verification temporarily unavailable; current updater retained and Folkways checks remain independent"; }
+            return reminder("Updater downloaded: " + build.version + "; installs after the game JVM exits", proof);
+        }); } catch (VerificationUnavailable e) { return UpdateCheckResult.status("Updater verification temporarily unavailable; current updater retained and Folkways checks remain independent"); }
+    }
+    private UpdateCheckResult reminder(String message, Proof proof) throws IOException {
+        return UpdateCheckResult.pending(message, "updater-self", proof.build.repository, proof.build.minecraft, proof.build.channel,
+            proof.build.sequence, proof.build.commit, SelfUpdater.hashOf(proof.asset), proof.asset.size);
     }
     private SelfUpdater.Source source(Config config) {
         Transport transport = new Transport(config);

@@ -38,23 +38,24 @@ final class GitHubFolkways {
             }
         };
     }
-    String checkAndStage(Config config) throws Exception { return checkAndStage(config, false); }
-    String checkAndStage(Config config, boolean takeOverExisting) throws Exception {
-        if (u.loaderVersion == null) return "Official Folkways checks require the current NeoForge version; use the in-game updater";
+    String checkAndStage(Config config) throws Exception { return checkAndStageResult(config, false).message(); }
+    String checkAndStage(Config config, boolean takeOverExisting) throws Exception { return checkAndStageResult(config, takeOverExisting).message(); }
+    UpdateCheckResult checkAndStageResult(Config config, boolean takeOverExisting) throws Exception {
+        if (u.loaderVersion == null) return UpdateCheckResult.status("Official Folkways checks require the current NeoForge version; use the in-game updater");
         return u.locked(() -> {
             managed(config); rejectOtherJournal();
             if (Files.exists(u.home.resolve(JOURNAL))) throw new IOException("An interrupted Folkways installation must recover after the game exits");
             State recorded = state(); Map<String,Present> installed = scan();
             if (recorded.owned.isEmpty()) {
-                if (!takeOverExisting && installed.keySet().stream().anyMatch(GitHubFolkways::folkways)) return "Existing Folkways JARs are protected; automatic installation only starts from an empty Folkways set";
-                if (legacyOwned()) return "Existing signed-channel ownership is protected; restore its manifest or migrate explicitly";
+                if (!takeOverExisting && installed.keySet().stream().anyMatch(GitHubFolkways::folkways)) return UpdateCheckResult.status("Existing Folkways JARs are protected; automatic installation only starts from an empty Folkways set");
+                if (legacyOwned()) return UpdateCheckResult.status("Existing signed-channel ownership is protected; restore its manifest or migrate explicitly");
             }
-            if (takeOverExisting && legacyOwned()) return "Existing signed-channel ownership is protected; restore its manifest or migrate explicitly";
+            if (takeOverExisting && legacyOwned()) return UpdateCheckResult.status("Existing signed-channel ownership is protected; restore its manifest or migrate explicitly");
             State before = takeOverExisting ? takeoverBaseline(recorded, installed, config) : recorded;
             Set<String> takenOver = new TreeSet<>(before.owned.keySet()); takenOver.removeAll(recorded.owned.keySet());
             validateOwned(before, installed); restorePending(before);
             Source source = source(config); Release release = release(source, config);
-            if (release == null) return "No official " + config.channel + " Folkways release is available in " + config.repository;
+            if (release == null) return UpdateCheckResult.status("No official " + config.channel + " Folkways release is available in " + config.repository);
             Map<String,Asset> all = releaseAssets(release, config);
             Commit commit = decode(source.official(base(config) + "/commits/" + release.target_commitish, 2 * 1024 * 1024), Commit.class);
             if (commit == null || !release.target_commitish.equals(commit.sha)) throw new IOException("Official Folkways release commit could not be verified");
@@ -64,12 +65,12 @@ final class GitHubFolkways {
             long accepted = before.highWater.getOrDefault(config.scope(), 0L);
             if (sequence < accepted || sequence == accepted && !fingerprint.equals(before.accepted.get(config.scope()))) throw new IOException("Official release is older or changed within the same CI build");
             if (takenOver.isEmpty() && sequence == accepted && config.scope().equals(before.scope) && currentSelection(before, config)
-                && existingClosureComplete(before, installed, config)) return "Already installed official Folkways " + commit.sha;
+                && existingClosureComplete(before, installed, config)) return UpdateCheckResult.status("Already installed official Folkways " + commit.sha);
             if (before.pending != null) {
                 try {
                     Plan old = pending(before, false);
                     if (sameScope(old, config) && old.sequence > sequence) throw new IOException("A newer Folkways build is already queued");
-                    if (takenOver.isEmpty() && sameScope(old, config) && old.sequence == sequence && old.fingerprint.equals(fingerprint)) return "Official Folkways is already downloaded; installs after this game JVM exits; commit " + old.commit;
+                    if (takenOver.isEmpty() && sameScope(old, config) && old.sequence == sequence && old.fingerprint.equals(fingerprint)) return reminder("Official Folkways is already downloaded; installs after this game JVM exits; commit " + old.commit, old);
                 } catch (DifferentSelection ignored) { }
             }
             Plan plan = new Plan(); plan.schema = 1; plan.repository = config.repository; plan.minecraft = config.minecraft; plan.channel = config.channel;
@@ -120,9 +121,14 @@ final class GitHubFolkways {
                 }
                 u.clear(previous);
             } finally { u.clear(candidate); }
-            return "Downloaded official Folkways " + config.modules + (plan.libraries.isEmpty() ? "" : " + required dependencies " + plan.libraries.keySet())
-                + (takenOver.isEmpty() ? "" : "; one-time takeover staged for " + takenOver) + "; installs after the game JVM exits; commit " + plan.commit;
+            return reminder("Downloaded official Folkways " + config.modules + (plan.libraries.isEmpty() ? "" : " + required dependencies " + plan.libraries.keySet())
+                + (takenOver.isEmpty() ? "" : "; one-time takeover staged for " + takenOver) + "; installs after the game JVM exits; commit " + plan.commit, plan);
         });
+    }
+
+    private UpdateCheckResult reminder(String message, Plan plan) {
+        return UpdateCheckResult.pending(message, "folkways-github", plan.repository, plan.minecraft, plan.channel,
+            new TreeSet<>(plan.modules), plan.sequence, plan.commit, plan.fingerprint);
     }
 
     String apply(Config config) throws Exception {

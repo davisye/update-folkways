@@ -74,19 +74,28 @@ public final class Updater {
         });
     }
 
-    public String checkAndStage() throws Exception { return checkAndStage(null, false); }
-    public String checkAndStage(boolean takeOverExisting) throws Exception { return checkAndStage(null, takeOverExisting); }
+    public String checkAndStage() throws Exception { return checkAndStageResult().message(); }
+    public String checkAndStage(boolean takeOverExisting) throws Exception { return checkAndStageResult(null, takeOverExisting).message(); }
     /** The consent applies only to this defensive configuration snapshot, never a subsequently selected source. */
-    public String checkAndStage(Config expected, boolean takeOverExisting) throws Exception { return checkAndStage(expected, takeOverExisting, () -> true); }
+    public String checkAndStage(Config expected, boolean takeOverExisting) throws Exception { return checkAndStageResult(expected, takeOverExisting).message(); }
     public String checkAndStage(Config expected, boolean takeOverExisting, java.util.function.BooleanSupplier stillCurrent) throws Exception {
-        return checkAndStage(expected, takeOverExisting, stillCurrent, PendingCommit::run);
+        return checkAndStageResult(expected, takeOverExisting, stillCurrent).message();
     }
     public String checkAndStage(Config expected, boolean takeOverExisting, java.util.function.BooleanSupplier stillCurrent, CommitAuthorization authorization) throws Exception {
+        return checkAndStageResult(expected, takeOverExisting, stillCurrent, authorization).message();
+    }
+    public UpdateCheckResult checkAndStageResult() throws Exception { return checkAndStageResult(null, false); }
+    public UpdateCheckResult checkAndStageResult(boolean takeOverExisting) throws Exception { return checkAndStageResult(null, takeOverExisting); }
+    public UpdateCheckResult checkAndStageResult(Config expected, boolean takeOverExisting) throws Exception { return checkAndStageResult(expected, takeOverExisting, () -> true); }
+    public UpdateCheckResult checkAndStageResult(Config expected, boolean takeOverExisting, java.util.function.BooleanSupplier stillCurrent) throws Exception {
+        return checkAndStageResult(expected, takeOverExisting, stillCurrent, PendingCommit::run);
+    }
+    public UpdateCheckResult checkAndStageResult(Config expected, boolean takeOverExisting, java.util.function.BooleanSupplier stillCurrent, CommitAuthorization authorization) throws Exception {
         Objects.requireNonNull(stillCurrent); Objects.requireNonNull(authorization);
         Config c = expected == null ? Config.load(game) : JSON.fromJson(JSON.toJson(expected), Config.class);
         c.validate();
-        if (c.isLocalDevelopment(game)) return "Local development: update check and replacement disabled";
-        if (c.manifestUrl.isBlank()) return new GitHubFolkways(this, stillCurrent, authorization).checkAndStage(c, takeOverExisting);
+        if (c.isLocalDevelopment(game)) return UpdateCheckResult.status("Local development: update check and replacement disabled");
+        if (c.manifestUrl.isBlank()) return new GitHubFolkways(this, stillCurrent, authorization).checkAndStageResult(c, takeOverExisting);
         if (takeOverExisting) throw new TakeoverRejectedException("", TakeoverRejectedException.Reason.UNSUPPORTED_CHANNEL);
         return locked(() -> {
             requireManaged(c);
@@ -103,7 +112,7 @@ public final class Updater {
             if (m.sequence < accepted) throw new IOException("Rejected manifest rollback");
             if (m.sequence == accepted) {
                 if (!Objects.equals(s.accepted.get(c.scope()), sha(envelope))) throw new IOException("Sequence reused with different manifest");
-                if (isInstalled(m, s, c)) return "Already installed " + m.buildId;
+                if (isInstalled(m, s, c)) return UpdateCheckResult.status("Already installed " + m.buildId);
             }
             Path pending = home.resolve("pending");
             if (Files.exists(pending.resolve("manifest.json"))) {
@@ -113,7 +122,7 @@ public final class Updater {
                     if (pm.sequence > m.sequence) throw new IOException("Rejected downgrade of pending update");
                     if (pm.sequence == m.sequence) {
                         if (!sha(prior).equals(sha(envelope))) throw new IOException("Pending sequence reused");
-                        verifyPending(pending, pm, c); return "Update already downloaded: " + pm.buildId;
+                        verifyPending(pending, pm, c); return signedReminder("Update already downloaded: " + pm.buildId, pm, c);
                     }
                 } catch (ScopeMismatch ignored) { /* Explicit source/channel selection discards old pending only after success. */ }
             }
@@ -136,8 +145,15 @@ public final class Updater {
                 requireManaged(c); validateOwned(state(), c);
                 commitPending(candidate, pending, c);
             } finally { clear(candidate); }
-            return "Downloaded " + m.buildId + "; installs before the next supervised launch";
+            return signedReminder("Downloaded " + m.buildId + "; installs before the next supervised launch", m, c);
         });
+    }
+
+    private UpdateCheckResult signedReminder(String message, Manifest manifest, Config config) {
+        Map<String, Object> artifacts = new TreeMap<>();
+        for (Artifact item : manifest.components) if (config.modules.contains(item.module)) artifacts.put(item.module, List.of(item.sha256, item.size));
+        return UpdateCheckResult.pending(message, "folkways-signed", manifest.repository, manifest.minecraft, manifest.loader,
+            manifest.channel, new TreeSet<>(config.modules), manifest.sequence, manifest.buildId, artifacts);
     }
 
     /** Package-private: only Bootstrap, while holding its lifetime session lock, calls this. */

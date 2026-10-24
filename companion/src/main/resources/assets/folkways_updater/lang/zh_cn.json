@@ -80,5 +80,6 @@
   "folkways_updater.status.checking_takeover": "正在按本次授权接管 %s / %s；仍须官方校验，退出后才备份并安装…",
   "folkways_updater.status.takeover_unselected": "现有 %s 未包含在本次选择中，接管已取消。请勾选该模块或自行移出后重新确认。",
   "folkways_updater.status.takeover_composite": "现有 %s 属于复合或嵌套 JAR，无法安全单独接管；文件已保留。",
-  "folkways_updater.status.takeover_signed": "签名 manifest 来源不支持此接管操作，已有托管保护保持不变。"
+  "folkways_updater.status.takeover_signed": "签名 manifest 来源不支持此接管操作，已有托管保护保持不变。",
+  "folkways_updater.status.source_update": "[%s / %s] %s"
 }

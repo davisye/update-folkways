@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-10-24T07:42:21.596096+00:00",
+  "scope": "Local Windows Java 21 candidate and isolated NeoForge client",
+  "tests": {
+    "total": 198,
+    "passed": 197,
+    "failures": 0,
+    "skipped": 1,
+    "skipReason": "Existing test volume has no 8.3 root alias"
+  },
+  "focusedIndependentTests": 29,
+  "remainingReviewP1P2": 0,
+  "behaviors": {
+    "firstAndCachedPendingShareKey": true,
+    "independentFolkwaysAndSelfKeys": true,
+    "restartHistory": true,
+    "localizedTextDoesNotAffectKey": true,
+    "cancelledRequestDoesNotConsume": true,
+    "displayAndRevocationSerialized": true,
+    "bothNewUpdatesShareOneToast": true,
+    "emptyDedicatedServerDoesNotConsume": true,
+    "historyFailureKeepsSessionDeduplication": true,
+    "historyEntriesOnDisk": 256
+  },
+  "clientUi": {
+    "started": true,
+    "factoryRegistered": true,
+    "missingOptionalPrerequisitesSelectable": true,
+    "allMissingPrerequisiteModulesClicked": true,
+    "repositoryClicked": true,
+    "localClicked": true,
+    "allOptionalModulesSavedWithoutPrerequisites": true,
+    "saved": true,
+    "hiddenEditsPreserved": true,
+    "localModeMatchesBoolean": true,
+    "legacyMarkerIgnoredWhenDisabled": true,
+    "explicitLocalModeEnabled": true,
+    "saveAndCheckRemainsAvailableWhileBusy": true,
+    "checkButtonClickedInLocalMode": true,
+    "independentSelfCheckCompleted": true,
+    "selfCheckHasNoInstalledJarTarget": true,
+    "folkwaysCheckSkippedInLocalMode": true,
+    "checkResultNamesSelectedSource": true,
+    "takeoverDisabledInLocalMode": true,
+    "takeoverConfirmationNamesSelection": true,
+    "takeoverCancelDoesNotSaveOrQueue": true,
+    "factoryBackClosesToParent": true,
+    "passed": true,
+    "phase": "COMPLETE"
+  },
+  "limits": {
+    "actualUserGameModified": false,
+    "productionServiceModified": false,
+    "liveMinecraftRepeatNotificationScenario": false,
+    "deduplicationVerifiedUsingCoreAndQueueFixtures": true
+  }
+}

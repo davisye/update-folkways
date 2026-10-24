@@ -80,5 +80,6 @@
   "folkways_updater.status.checking_takeover": "Taking over %s / %s for this round; official verification required. Backup and installation wait for exit...",
   "folkways_updater.status.takeover_unselected": "Existing %s is outside this selection. Takeover cancelled. Select that module or move it out manually before confirming again.",
   "folkways_updater.status.takeover_composite": "Existing %s is in a composite or nested JAR and cannot be safely taken over separately. Files retained.",
-  "folkways_updater.status.takeover_signed": "This takeover is unavailable for a signed manifest source. Existing ownership remains protected."
+  "folkways_updater.status.takeover_signed": "This takeover is unavailable for a signed manifest source. Existing ownership remains protected.",
+  "folkways_updater.status.source_update": "[%s / %s] %s"
 }
