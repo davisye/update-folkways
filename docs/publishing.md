@@ -112,6 +112,8 @@ python tools/publish.py publish-local --package work/signed-release --public-key
 
 ## OpenList 接入验收
 
+生产 Folkways 只读外链目录的定时刷新见 [OpenList nightly 自动同步](openlist-sync.md)。它只维护两个仓库的 nightly 链接，不承担签名发行或长期二进制归档。
+
 UrlTree 适合展示只读外链；可写能力由后端驱动决定。`PUT /api/fs/put`、创建目录、重命名都需要相应授权。HTTP 200 或 WebDAV 声明支持 MOVE，不能证明任务完成、访客已可读取，或后端提供原子操作。[OpenList FS API](https://openlistteam.github.io/docs/guide/api/fs.html)
 
 生产适配器上线前，应在授权测试挂载依次验证：最小权限账号、上传任务完成、写后读回 SHA256、访客鉴权、缓存失效、同时发布、中断恢复、正式版本防覆盖、latest 不倒退，以及上游删除后归档二进制仍可获取。

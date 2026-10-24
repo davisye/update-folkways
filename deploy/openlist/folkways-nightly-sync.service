@@ -1,0 +1,44 @@
+[Unit]
+Description=Synchronize Folkways nightly links in OpenList
+Documentation=https://github.com/davisye/update-folkways/blob/main/docs/openlist-sync.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=folkways-sync
+Group=folkways-sync
+WorkingDirectory=/opt/folkways-openlist-sync
+ExecStart=/usr/bin/python3 /opt/folkways-openlist-sync/sync_openlist.py --state-dir /var/lib/folkways-openlist-sync --token-file /run/credentials/folkways-nightly-sync.service/openlist-token --execute
+LoadCredential=openlist-token:/etc/folkways-openlist-sync/openlist-token
+StateDirectory=folkways-openlist-sync
+StateDirectoryMode=0700
+RuntimeDirectory=folkways-openlist-sync
+RuntimeDirectoryMode=0700
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=5min
+TimeoutStopSec=20s
+Restart=no
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=folkways-nightly-sync

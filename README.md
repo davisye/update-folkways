@@ -84,7 +84,7 @@ Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一�
 
 网络新配置默认 `mirror-first`，GitHub 下载与 [github.davisye.cn](https://github.davisye.cn/) 可故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。Windows 建连失败时可回退到已启用的静态系统 HTTP 代理，无需额外启动参数。可信元信息来自官方 API；不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
 
-[OpenList](https://pan.davisye.cn/) 可展示 Folkways 发布链接。nightly 只保留最新一套，其他渠道按版本归档；外链目录不等于持久二进制存储。发布工具和存储边界见 [发布镜像指南](docs/publishing.md)。
+[OpenList](https://pan.davisye.cn/) 可展示 Folkways 发布链接。[主机侧自动同步](docs/openlist-sync.md) 每十分钟检查两个仓库，只更新各自已完成发布的 nightly 外链，并保留其他目录；JAR 继续由国内镜像分发。其他渠道按版本归档；外链目录不等于持久二进制存储。发布工具和存储边界见 [发布镜像指南](docs/publishing.md)。
 
 ## 游戏内命令
 
