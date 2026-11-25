@@ -61,5 +61,19 @@ class ConfigEditTest {
             else System.setProperty("folkways.localDevelopment", previous);
         }
     }
+    @Test void moduleVocabularyFollowsChannel() throws Exception {
+        Updater.initialize(game);
+        Config.edit(game, c -> c.modules = new java.util.ArrayList<>(java.util.List.of("core", "vanilla", "airline", "assistant")));
+        assertEquals(java.util.List.of("core", "vanilla", "airline", "assistant"), Config.load(game).modules);
+        assertThrows(java.io.IOException.class, () -> Config.edit(game, c -> {
+            c.manifestUrl = "https://pan.davisye.cn/manifest.json";
+            c.modules = new java.util.ArrayList<>(java.util.List.of("core", "vanilla", "airline"));
+        }));
+        Config.edit(game, c -> {
+            c.manifestUrl = "https://pan.davisye.cn/manifest.json";
+            c.modules = new java.util.ArrayList<>(java.util.List.of("core", "vanilla", "create"));
+        });
+        assertEquals(java.util.List.of("core", "vanilla", "create"), Config.load(game).modules);
+    }
 
 }

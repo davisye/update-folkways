@@ -8,6 +8,6 @@
 
 `2026-10-23-client-configuration.json` 和 `2026-10-24-independent-client-configuration.json` 中“缺前置时按钮禁用”是旧界面行为；可选前置自动安装改动后的当前界面允许直接选择，不能用这些旧记录验证新选择规则。
 
-`2026-11-25-modern-nightly.json` 记录四模块 nightly、Airline/Assistant 闭包与 v0.1.0 正式版 tag 固定；当时的界面截图来自五扩展之前的构建，界面布局以对应 CI 的客户端验收源码为准。
+`2026-11-25-modern-nightly.json` 记录四模块 nightly、Airline/Assistant 闭包与 v0.1.0 正式版 tag 固定；当时的界面截图来自五扩展之前的构建，界面布局以对应 CI 的客户端验收源码为准。`2026-11-25-adversarial-audit.json` 是 rc.3 发布前的对抗审计，结论为通过，含两项已记录的残留边界。
 
 每次新记录应标明实际源码/发行身份、测试方式、平台、是否经过正式网络路径、是否启动 Minecraft，以及未覆盖的范围。最新汇总见 [验证说明](../verification.md)。

@@ -270,4 +270,40 @@ class GitHubFolkwaysTest {
         assertTrue(ModMetadata.matches("0.1.0-nightly.860b56a", "[0.1.0-nightly.860b56a,)"));
         assertThrows(IOException.class, () -> ModMetadata.matches("0.1.0-nightly.1111111", "[0.1.0-nightly.860b56a]"));
     }
+    @Test void releaseMissingRequiredModuleMixingVersionsOrDuplicatingAssetsIsRejected() throws Exception {
+        fixture(true); publishModern(2);
+        release.assets.removeIf(a -> a.name.startsWith("folkways-vanilla-"));
+        assertTrue(assertThrows(IOException.class, updater::checkAndStage).getMessage().contains("missing the required core/vanilla"));
+        publishModern(2);
+        GitHubFolkways.Asset vanilla = release.assets.stream().filter(a -> a.name.startsWith("folkways-vanilla-")).findFirst().orElseThrow();
+        byte[] mixed = jar("folkways_vanilla", "0.1.0-nightly.9999999", dependency("folkways_vanilla", "folkways_core", "[0.1.0-nightly.9999999]"));
+        vanilla.name = "folkways-vanilla-neoforge-1.21.1-0.1.0-nightly.9999999.jar";
+        vanilla.browser_download_url = "https://github.com/" + config.repository + "/releases/download/nightly/" + vanilla.name;
+        vanilla.size = mixed.length; vanilla.digest = "sha256:" + Updater.sha(mixed); downloads.put(vanilla.browser_download_url, mixed);
+        assertTrue(assertThrows(IOException.class, updater::checkAndStage).getMessage().contains("mixes module versions"));
+        publishModern(2);
+        GitHubFolkways.Asset core = release.assets.stream().filter(a -> a.name.startsWith("folkways-core-")).findFirst().orElseThrow();
+        GitHubFolkways.Asset duplicate = new GitHubFolkways.Asset(); duplicate.id = core.id + 1; duplicate.name = core.name;
+        duplicate.browser_download_url = core.browser_download_url; duplicate.size = core.size; duplicate.digest = core.digest; duplicate.state = "uploaded";
+        release.assets.add(duplicate);
+        assertTrue(assertThrows(IOException.class, updater::checkAndStage).getMessage().contains("duplicate"));
+        assertFalse(Files.exists(pending()));
+    }
+    @Test void branchTargetPlanAppliesOfflineAndRejectsTamperedCommit() throws Exception {
+        fixture(true); config.channel = "release"; save(); publish(2);
+        String sha = release.target_commitish; retagRelease("v0.1.0");
+        release.prerelease = false; release.target_commitish = "master";
+        tagCommit = sha; annotatedTag = true; run.head_sha = sha; run.head_branch = "v0.1.0";
+        assertTrue(updater.checkAndStage().contains("Downloaded official"));
+        offline = true;
+        GitHubFolkways.Plan plan = Updater.JSON.fromJson(Files.readString(pending().resolve("plan.json")), GitHubFolkways.Plan.class);
+        plan.commit = String.format("%040x", 999);
+        byte[] tampered = json(plan); Files.write(pending().resolve("plan.json"), tampered);
+        GitHubFolkways.State state = state(); state.pending = Updater.sha(tampered);
+        Files.writeString(game.resolve(".folkways-updater/github-folkways-state.json"), Updater.JSON.toJson(state));
+        assertThrows(IOException.class, updater::applyPending);
+        plan.commit = sha; byte[] restored = json(plan); Files.write(pending().resolve("plan.json"), restored);
+        state.pending = Updater.sha(restored); Files.writeString(game.resolve(".folkways-updater/github-folkways-state.json"), Updater.JSON.toJson(state));
+        assertTrue(updater.applyPending().contains("Installed official"));
+    }
 }
