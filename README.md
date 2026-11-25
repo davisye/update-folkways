@@ -30,7 +30,7 @@
 2. 从 [Releases](https://github.com/davisye/update-folkways/releases) 下载 **`folkways-updater-neoforge-1.21.1-<version>.jar`**，放进实例 `mods/`。只保留一份 updater。
 3. 照常启动。空实例默认检查并预下载 Folkways **Core、Vanilla 和缺失的 LDLib2**；正常退出整个游戏，等待后台 helper 安装，再次启动后加载。
 
-更新 helper 已包含在 Mod 内，会自动释放到实例的 `.folkways-updater/`。不必更换启动器或复制额外脚本。Minecraft、NeoForge 仍需先安装；在配置页勾选 Create、Modular Golems、Cookery 后，会一并预下载缺失的官方前置及必要依赖。
+更新 helper 已包含在 Mod 内，会自动释放到实例的 `.folkways-updater/`。不必更换启动器或复制额外脚本。Minecraft、NeoForge 仍需先安装；在配置页勾选 Airline、Assistant 或旧集成 Create、Modular Golems、Cookery 后，会一并预下载缺失的官方前置及必要依赖。
 
 在 NeoForge **Mods → Folkways Development Updater → 配置** 中选择源、渠道和模块，或开启本地开发保护。点击检查会先保存，再后台检查；主菜单也能看到状态与下载提示，不必先进入世界。
 
@@ -80,9 +80,11 @@ flowchart TD
 | Folkways 默认来源 | 可选 `IzakyL/folkways` 或 `davisye/folkways`；核对官方 Release 资产摘要、固定提交和对应成功发布 CI，无需填写密钥 |
 | Folkways 可选签名来源 | 配置非空 `manifestUrl` 与可信 Ed25519 公钥后使用；公共自动签名发布尚未启用 |
 
-Core、Vanilla 必选，Create、Modular Golems、Cookery 按需选择，同一次更新来自同一构建。基础安装需要的外置库是 LDLib2；选择可选扩展时，会补齐缺失的 Create、Modular Golems、Kaleidoscope Cookery，以及必要的 L2Library。Ponder、Flywheel、Starlark 等内嵌库不重复安装。已有兼容前置只读复用，版本冲突时提示并保留原文件。具体固定版本和官方来源见 [前置安装规则](docs/dependencies.md)。
+Core、Vanilla 必选，Airline、Assistant 按需选择，同一次更新来自同一构建。上游自 2026-11-24 起把旧集成 Create、Modular Golems、Cookery 等并入 Core/Vanilla，nightly 只发布 core/vanilla/airline/assistant 四个模块（版本形如 `0.1.0-nightly.<commit>`）；仍发布旧布局的源可继续选择旧集成，对不再发布的源勾选它们会提示取消勾选，已托管的旧集成 JAR 在取消勾选后的下次安装时移除。基础安装需要的外置库是 LDLib2；选择 Airline 时补齐缺失的 Create 与 Sable，Assistant 所需 jpimini 已内嵌；旧集成扩展补齐 Create、Modular Golems、Kaleidoscope Cookery 及必要的 L2Library。Ponder、Flywheel、Starlark 等内嵌库不重复安装。已有兼容前置只读复用，版本冲突时提示并保留原文件。具体固定版本和官方来源见 [前置安装规则](docs/dependencies.md)。
 
-`manifestUrl` 留空即使用官方 GitHub 来源，不表示关闭 Folkways 更新。首次自动安装默认要求没有 Folkways；已有手动或本地编译的 Folkways JAR 可在“更多设置 → 接管现有并更新”中明确授权一次。完整校验后登记，整个游戏退出后先备份再替换；未知/复合/嵌套 JAR 和手动依赖不会被接管。release、rc、beta、alpha、nightly 是可选渠道，当前两源实际只有 nightly；没有符合条件的发行时保留当前文件。
+**存档不可降级：** Folkways 新版本会迁移存档数据（当前上游数据版本 v5），回退只恢复 JAR、不恢复世界数据。首次更新或回退前请备份存档，并在复制实例中验证。
+
+`manifestUrl` 留空即使用官方 GitHub 来源，不表示关闭 Folkways 更新。首次自动安装默认要求没有 Folkways；已有手动或本地编译的 Folkways JAR 可在“更多设置 → 接管现有并更新”中明确授权一次。完整校验后登记，整个游戏退出后先备份再替换；未知/复合/嵌套 JAR 和手动依赖不会被接管。release、rc、beta、alpha、nightly 是可选渠道；`IzakyL/folkways` 现有 nightly 与 v0.1.0 正式版，`davisye/folkways` 当前只有 nightly。没有符合条件的发行时保留当前文件。
 
 网络新配置默认 `mirror-first`，GitHub 校验 API 和附件下载均与 [github.davisye.cn](https://github.davisye.cn/) 按该策略故障切换。`region` 策略使用本地 `regionHint=CN`，不查询 IP 地域。Windows 建连失败时可回退到已启用的静态系统 HTTP 代理，无需额外启动参数。API 元数据的仓库、CI、摘要仍需校验；经镜像取得时同时信任该镜像，不可用时保留现有文件。SHA256 校验不是数字签名，成功 CI 记录也不是签名证明。
 
@@ -125,6 +127,6 @@ Windows/Linux [CI](https://github.com/davisye/update-folkways/actions/workflows/
 
 Drop one updater JAR into `mods/` and launch NeoForge 1.21.1 normally. The mod checks and stages downloads, then an embedded helper waits for the entire game JVM to exit before installing. The next launch loads the installed version; this does not guarantee the newest release before every startup scan.
 
-The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. Optional Create, Modular Golems and Cookery integrations can be selected before their prerequisites are installed: missing audited prerequisites and required transitive dependencies are staged together. Compatible existing files are reused; conflicting manual files are retained. Only `config.localDevelopment` pauses Folkways and dependency updates. Updater self-updates use the independent `selfUpdateEnabled` switch and continue in local-development mode. IDEs, source identity, environment variables, JVM flags, and legacy marker files do not enable that mode. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
+The default source installs Folkways Core, Vanilla, and missing LDLib2 from verified official release metadata; no signing keys are required. The module set follows each release's actual assets: core/vanilla are required, Airline and Assistant are optional, and the legacy Create/Modular Golems/Cookery integrations remain selectable only where a source still publishes them (upstream merged them into Core/Vanilla on 2026-11-24). Missing audited prerequisites and required transitive dependencies are staged together; Airline pulls Create and Sable, while Assistant's jpimini dependency is bundled. Compatible existing files are reused; conflicting manual files are retained. Folkways save data migrates forward and cannot be downgraded: rollback restores JARs only, so back up worlds first. Only `config.localDevelopment` pauses Folkways and dependency updates. Updater self-updates use the independent `selfUpdateEnabled` switch and continue in local-development mode. IDEs, source identity, environment variables, JVM flags, and legacy marker files do not enable that mode. Manually installed Folkways is not silently adopted. A nonempty manifest URL selects the optional signed channel; public automatic signing remains deferred.
 
 See [installation](docs/installation.md), [configuration](docs/configuration.md), and [verification limits](docs/verification.md). Drop-in restart was tested on an isolated NeoForge dedicated server with only this mod; a full Folkways pack, human players, and the Minecraft client were not tested. Full client restart remains unsupported.

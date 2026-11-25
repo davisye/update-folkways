@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "date": "2026-11-25",
+  "repository": "davisye/update-folkways",
+  "scenario": "adversarial review of the upstream module-set / tag-pin / dependency-metadata changes before the rc.3 release",
+  "scope": "git diff main...feat/upstream-module-set",
+  "method": "manual red-team review with executable attack tests and real-jar/real-network verification; an independent subagent audit was attempted but the provider quota was exhausted, so the audit was performed in-session",
+  "propositions": [
+    {
+      "id": "A-trust-chain",
+      "claim": "branch target_commitish plus tag resolution does not weaken the release trust chain",
+      "attacks": [
+        "tag chain that does not resolve to one full commit SHA -> rejected (releaseChannelWithoutMatchingCiOrResolvableTagIsRejected)",
+        "successful CI missing on the resolved commit -> rejected (same test)",
+        "offline pending plan with tampered commit -> rejected by verifyRun head_sha binding (branchTargetPlanAppliesOfflineAndRejectsTamperedCommit)",
+        "release changed during download -> existing fingerprint re-check",
+        "older or reused CI sequence -> existing per-scope high-water and fingerprint checks"
+      ],
+      "result": "no exploitable weakening found",
+      "residual": "branch-target plans cannot re-resolve the tag offline; the binding is verified at staging and the downloaded bytes remain digest-verified. A tag moved between resolution and download leaves the recorded commit possibly different from the actual build commit, the same trust class as SHA-target releases whose recorded target is fixed at creation."
+    },
+    {
+      "id": "B-module-subset",
+      "claim": "dynamic module acceptance cannot mix builds, silently skip selections, or break ownership/recovery",
+      "attacks": [
+        "release missing core or vanilla -> rejected (releaseMissingRequiredModuleMixingVersionsOrDuplicatingAssetsIsRejected)",
+        "mixed module versions in one release -> rejected (same test)",
+        "duplicate module asset -> rejected (same test)",
+        "selected retired module -> explicit rejection before any download (retiredSelectedModuleIsRejectedWithGuidanceAndNoPending, live probe step 4)",
+        "unknown upstream folkways asset ignored while unknown installed folkways-named JAR stays protected (unknownUpstreamAssetsAreIgnoredButUnknownInstalledFolkwaysJarsStayProtected)",
+        "deselected owned integrations removed at apply while prerequisites retained (deselectingRetiredIntegrationsRemovesOwnedJarsOnTheNextModernInstall)",
+        "explicit takeover of assistant with bundled jpimini (modernAssistantWithBundledJpiminiCanBeTakenOverExplicitly)"
+      ],
+      "result": "pass",
+      "note": "ownership of newly installed files begins at apply, not at staging; the takeover test initially asserted the wrong stage and was corrected"
+    },
+    {
+      "id": "C-metadata-default-type",
+      "claim": "defaulting an omitted dependency type to required neither admits rejected metadata nor misclassifies optional dependencies",
+      "evidence": [
+        "NeoForge official documentation states type defaults to required (docs.neoforged.net Mod Files, Dependency Configurations)",
+        "typeless dependency enforced as required; unknown type still rejected (omittedDependencyTypeDefaultsToRequiredLikeNeoForge)",
+        "real Sable 2.0.6 with bundled Veil 4.3.2 / sablecompanion 1.6.0 parsed and installed through the production path (live probe step 2)"
+      ],
+      "result": "pass",
+      "residual": "versionRange remains mandatory for required dependencies although NeoForge allows an empty range meaning any version; this is stricter and fail-closed, and may reject a future jar that omits versionRange"
+    },
+    {
+      "id": "D-sable-pin",
+      "claim": "the sable pin matches the official Modrinth version and the real jar",
+      "evidence": [
+        "project T9PomCSv / version fg9dTRz9 / file sable-neoforge-1.21.1-2.0.6.jar / size 12986135 / sha512 76d293ce... verified against api.modrinth.com and the downloaded bytes",
+        "jar mod identity {sable: 2.0.6} matches the pin; airline exact pin [2.0.6] satisfied",
+        "live install downloaded and hash-verified through the production pin path"
+      ],
+      "result": "pass"
+    },
+    {
+      "id": "E-signed-channel",
+      "claim": "the dormant signed manifest channel has no regression",
+      "evidence": [
+        "SIGNED_MODULES keeps the five-module manifest contract; Config rejects new modules when manifestUrl is set (moduleVocabularyFollowsChannel)",
+        "full signed-manifest test suite passes unchanged"
+      ],
+      "result": "pass"
+    },
+    {
+      "id": "F-coverage",
+      "claim": "tests exercise failure and recovery paths rather than restating the implementation",
+      "evidence": [
+        "added: missing required module, mixed versions, duplicate asset, offline branch-target apply with tamper, retired selection, typeless/unknown dependency type, channel module vocabulary, assistant takeover",
+        "187 core tests, 185 pass, 2 platform-specific skips; 26 companion tests pass; 95 Python publisher tests pass"
+      ],
+      "result": "pass"
+    },
+    {
+      "id": "G-openlist-sync",
+      "claim": "the dynamic module set does not break the sync state machine or readback",
+      "evidence": [
+        "modern four-module layout accepted; missing core/vanilla rejected; mixed-layout sources synced with per-source asset counts; unknown modules not synced (test_sync_openlist.py)",
+        "asset regex built from the sorted known set and used with fullmatch; single-version check retained"
+      ],
+      "result": "pass"
+    },
+    {
+      "id": "H-misc",
+      "claim": "message mapping, localization, layout and resource limits remain bounded",
+      "evidence": [
+        "retired-module mapping regex bounded to lowercase module lists; both locale files carry the new keys",
+        "config screen keeps five rows within 320x240; client smoke source compiles and asserts bounds",
+        "CI Windows full pass; Ubuntu failed once on a Maven Central HTTP 429 while resolving the buildscript classpath (infrastructure), retried by the next push"
+      ],
+      "result": "pass"
+    }
+  ],
+  "findings": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "documentedBoundaries": 2
+  },
+  "conclusion": "pass; release may proceed after both-platform CI is green",
+  "limits": {
+    "gameLaunched": false,
+    "modClassesExecuted": false,
+    "independentSecondReviewer": false
+  }
+}

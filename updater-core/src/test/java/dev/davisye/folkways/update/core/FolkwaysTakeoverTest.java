@@ -154,4 +154,20 @@ class FolkwaysTakeoverTest {
         assertEquals(TakeoverRejectedException.Reason.UNSUPPORTED_CHANNEL, assertThrows(TakeoverRejectedException.class, () -> base.updater.checkAndStage(true)).reason);
         assertEquals(0, base.calls); assertFalse(Files.exists(statePath())); assertOriginals();
     }
+    @Test void modernAssistantWithBundledJpiminiCanBeTakenOverExplicitly() throws Exception {
+        base = new GitHubFolkwaysTest(); base.game = root; base.fixture(true); base.publishModern(2);
+        String version = "0.1.0-nightly." + base.release.target_commitish.substring(0, 7);
+        byte[] assistant = ApprovedDependenciesTest.nested(GitHubFolkwaysTest.jar("folkways_assistant", version, "# manual assistant"),
+                "jpimini", "0.1.0", GitHubFolkwaysTest.jar("jpimini", "0.1.0", ""));
+        Files.write(root.resolve("mods/my-assistant.jar"), assistant);
+        base.config.modules = new ArrayList<>(List.of("core", "vanilla", "assistant")); base.save();
+        assertTrue(base.updater.checkAndStage(snapshot(), true).contains("one-time takeover staged"));
+        assertEquals(Set.of("folkways_assistant"), base.state().owned.keySet());
+        assertEquals("my-assistant.jar", base.state().owned.get("folkways_assistant").file);
+        assertEquals(Updater.sha(assistant), base.state().owned.get("folkways_assistant").sha256);
+        assertTrue(base.updater.applyPending().contains("Installed official"));
+        assertEquals(Set.of("folkways_core", "folkways_vanilla", "folkways_assistant"), base.state().owned.keySet());
+        assertArrayEquals(assistant, Files.readAllBytes(root.resolve(".folkways-updater/github-folkways-backup/folkways_assistant.jar")));
+        assertFalse(base.state().owned.containsKey("jpimini"));
+    }
 }

@@ -10,6 +10,8 @@
 
 以下说明可选的 Folkways 签名镜像发布，不是普通用户默认 GitHub 首装的必需步骤。工具默认使用**逐 JAR 签名链接清单**，沿用真实 GitHub 资产，不需要重新制作 ZIP。清单恰含五个组件，客户端只下载所选模块。`pack` 保留可选 ZIP 兼容模式。
 
+**签名通道沿用旧五模块契约。** 上游 `IzakyL/folkways` 自 2026-11-24 起 nightly 改为 core/vanilla/airline/assistant 四模块，`fetch_release.py` 与 `publish.py` 仍要求 core/vanilla/create/modulargolems/cookery 五组件齐全，因此当前只能抓取仍发布旧布局的源（如 `davisye/folkways` 的历史 nightly）。默认官方 GitHub 通道已按实际资产动态识别模块，不受此限制；签名通道启用公共发布前需要先完成同样的现代化。
+
 ## 工具与权限边界
 
 需要 Java 21 JDK、Python 3.11+，无第三方 Python 依赖。

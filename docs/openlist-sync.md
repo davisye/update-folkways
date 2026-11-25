@@ -9,7 +9,7 @@ IzakyL/folkways/1.21.1/nightly
 davisye/folkways/1.21.1/nightly
 ```
 
-每次从官方 GitHub Release 获取真实五组件文件名、大小和摘要，再生成对应 `github.davisye.cn/_github/` 外链。不能假设附件永远叫 `0.1.0.jar`；例如 fork 使用过 `0.1.0-nightly.jar`。`release`、`rc`、`beta`、`alpha` 归档及其他目录不由这个任务修改。
+每次从官方 GitHub Release 获取真实组件文件名、大小和摘要，再生成对应 `github.davisye.cn/_github/` 外链。模块集按上游实际发布动态识别：core/vanilla 必需，create/modulargolems/cookery/airline/assistant 中实际发布的已知模块随快照同步，未知模块不进入外链目录。不能假设附件永远叫 `0.1.0.jar`；例如 fork 使用过 `0.1.0-nightly.jar`，上游 nightly 现使用 `0.1.0-nightly.<commit>`。`release`、`rc`、`beta`、`alpha` 归档及其他目录不由这个任务修改。
 
 每个来源分别验证：发布未完成、资产缺失或某一源不可用时保留该源上一份完整目录，另一源通过验证仍可更新。没有新的可用快照时不清空已有目录。GitHub 会替换 nightly 附件，定时检查之间及替换进行中的窗口仍可能出现 404，不能承诺零中断。
 
@@ -64,7 +64,7 @@ sudo systemctl start folkways-nightly-sync.service
 sudo journalctl -u folkways-nightly-sync.service -n 100 --no-pager
 ```
 
-验收包括两源各五文件的实际名称与大小、OpenList 返回的下载链接、重定向目标及有限 Range 的状态和字节。使用 API 实际给出的鉴权/签名链接，不能猜无签名 `/d/` URL。保留写前备份与写后读回证据；确认其他存储、归档和服务未受影响后才启用：
+验收包括两源各自实际资产数量的文件名称与大小、OpenList 返回的下载链接、重定向目标及有限 Range 的状态和字节。使用 API 实际给出的鉴权/签名链接，不能猜无签名 `/d/` URL。保留写前备份与写后读回证据；确认其他存储、归档和服务未受影响后才启用：
 
 ```sh
 sudo systemctl enable --now folkways-nightly-sync.timer

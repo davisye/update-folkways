@@ -152,13 +152,15 @@ final class ModMetadata {
         finish(table, values, manifestVersion);
     }
     private void finish(String table, Map<String,String> values, String manifestVersion) throws IOException {
-        if (table.startsWith("[[dependencies.") && !Set.of("required", "optional", "incompatible", "discouraged").contains(values.getOrDefault("type", ""))) throw new IOException("Unsupported dependency requirement type");
+        // NeoForge defaults an omitted dependency type to required; enforce it rather than ignore the declaration.
+        String type = values.getOrDefault("type", "required");
+        if (table.startsWith("[[dependencies.") && !Set.of("required", "optional", "incompatible", "discouraged").contains(type)) throw new IOException("Unsupported dependency requirement type");
         if (table.matches("\\[\\[\\s*mods\\s*\\]\\]")) {
             String id = values.get("modId"), version = values.get("version");
             if ("${file.jarVersion}".equals(version)) version = manifestVersion;
             if (id == null || !id.matches("[a-z][a-z0-9_]{1,63}") || version == null || version.length() > 256 || mods.putIfAbsent(id, version) != null) throw new IOException("Invalid or duplicate Mod identity");
         }
-        if (table.matches("\\[\\[dependencies\\.[a-z][a-z0-9_]*\\]\\]") && "required".equals(values.get("type"))) {
+        if (table.matches("\\[\\[dependencies\\.[a-z][a-z0-9_]*\\]\\]") && "required".equals(type)) {
             Dependency value = new Dependency(); value.owner = table.substring(15, table.length() - 2); value.id = values.get("modId"); value.range = values.get("versionRange");
             if (value.id == null || !value.id.matches("[a-z][a-z0-9_]{1,63}") || value.range == null || value.range.length() > 256) throw new IOException("Invalid required dependency metadata"); required.add(value);
         }

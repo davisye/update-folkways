@@ -171,6 +171,12 @@ public final class ClientUpdates {
             if (id.matches("[a-z0-9_]{1,64}"))
                 return Component.translatable("folkways_updater.status.unproven_override", dependencyName(id)).getString();
         }
+        String retired = "Selected Folkways modules are no longer published upstream: ";
+        if (reason != null && reason.startsWith(retired)) {
+            String modules = reason.substring(retired.length());
+            if (modules.matches("[a-z][a-z, ]{0,120}"))
+                return Component.translatable("folkways_updater.status.module_retired", modules).getString();
+        }
         if ("No successful official Folkways push CI exists for this release commit".equals(reason))
             return text("source_ci_unavailable").getString();
         if ("Official release changed while downloading; previous files were retained".equals(reason))
@@ -191,6 +197,7 @@ public final class ClientUpdates {
             case "kaleidoscope_cookery" -> "Kaleidoscope Cookery";
             case "ldlib2" -> "LDLib2";
             case "l2library" -> "L2Library";
+            case "sable" -> "Sable";
             default -> id;
         };
     }

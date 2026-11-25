@@ -69,17 +69,19 @@ public final class UpdaterConfigScreen extends Screen {
             module("modulargolems", "ModularGolems", "modulargolems", "ModularGolems 3.1.43+", x + third + 6, y, third);
             module("cookery", "Cookery", "kaleidoscope_cookery", "KaleidoscopeCookery 1.6.x", x + 2 * (third + 6), y, content - 2 * (third + 6));
             y += 24;
-            button("network", x, y, half, () -> {
+            module("airline", "Airline", "module_airline_help", x, y, third);
+            module("assistant", "Assistant", "module_assistant_help", x + third + 6, y, third);
+            button("network", x + 2 * (third + 6), y, content - 2 * (third + 6), () -> {
                 List<String> policies = List.of("mirror-first", "direct-first", "region");
                 draft.networkPolicy = policies.get((policies.indexOf(draft.networkPolicy) + 1) % policies.size()); changed();
             }, t("policy." + draft.networkPolicy)).setTooltip(Tooltip.create(t("network_help")));
-            button("self", x + half + 6, y, content - half - 6, () -> {
+            y += 24;
+            button("self", x, y, third, () -> {
                 draft.selfUpdateEnabled = !draft.selfUpdateEnabled; changed();
             }, toggle(draft.selfUpdateEnabled)).setTooltip(Tooltip.create(t("self_help")));
-            y += 24;
-            button("commands", x, y, half, () -> { draft.commandsEnabled = !draft.commandsEnabled; changed(); }, toggle(draft.commandsEnabled))
+            button("commands", x + third + 6, y, third, () -> { draft.commandsEnabled = !draft.commandsEnabled; changed(); }, toggle(draft.commandsEnabled))
                     .setTooltip(Tooltip.create(t("commands_help")));
-            button("more", x + half + 6, y, content - half - 6, () -> { advanced = true; rebuildWidgets(); });
+            button("more", x + 2 * (third + 6), y, content - 2 * (third + 6), () -> { advanced = true; rebuildWidgets(); });
         } else {
             button("poll", x, y, content, () -> {
                 List<Integer> times = List.of(60, 300, 900, 1800, 3600);
@@ -114,12 +116,20 @@ public final class UpdaterConfigScreen extends Screen {
     private void module(String module, String label, String dependency, String requirement, int x, int y, int size) {
         boolean selected = draft.modules.contains(module);
         boolean installed = ModList.get().isLoaded(dependency);
+        Button control = moduleButton(module, label, x, y, size);
+        control.setTooltip(Tooltip.create(t(installed ? "module_help" : "module_missing", requirement)));
+    }
+    private void module(String module, String label, String helpKey, int x, int y, int size) {
+        moduleButton(module, label, x, y, size).setTooltip(Tooltip.create(t(helpKey)));
+    }
+    private Button moduleButton(String module, String label, int x, int y, int size) {
+        boolean selected = draft.modules.contains(module);
         Button control = button("module", x, y, size, () -> {
             if (draft.modules.contains(module)) draft.modules.remove(module); else draft.modules.add(module);
             changed();
         }, selected ? "+" : "-", label);
         control.active = readable;
-        control.setTooltip(Tooltip.create(t(installed ? "module_help" : "module_missing", requirement)));
+        return control;
     }
 
     private void save() {
@@ -179,8 +189,13 @@ public final class UpdaterConfigScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(font, title, width / 2, 10, 0xFFFFFF);
         graphics.drawCenteredString(font, t(advanced ? "subtitle_advanced" : "subtitle"), width / 2, 28, 0xBBBBBB);
-        graphics.drawCenteredString(font, t("exit_help"), width / 2, 40, 0xBBBBBB);
         int content = Math.min(width - 24, 460), x = (width - content) / 2, y = height - 62;
+        int helpY = 40;
+        for (var line : font.split(t("exit_help"), content)) {
+            if (helpY > 49) break;
+            graphics.drawCenteredString(font, line, width / 2, helpY, 0xBBBBBB);
+            helpY += 9;
+        }
         Component message = feedback == null || System.nanoTime() > feedbackUntil ? ClientUpdates.status() : feedback;
         if (ClientUpdates.checking()) message = ClientUpdates.status();
         int lines = 0;

@@ -17,7 +17,9 @@ public final class Updater {
     @FunctionalInterface public interface CommitAuthorization { void commit(PendingCommit action) throws Exception; }
     static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     static final long MAX_BUNDLE = 128L * 1024 * 1024;
-    static final Set<String> MODULES = Set.of("core", "vanilla", "create", "modulargolems", "cookery");
+    static final Set<String> MODULES = Set.of("core", "vanilla", "create", "modulargolems", "cookery", "airline", "assistant");
+    /** The dormant signed-manifest channel keeps its audited legacy five-module contract. */
+    static final Set<String> SIGNED_MODULES = Set.of("core", "vanilla", "create", "modulargolems", "cookery");
     final Path game, home, mods;
     private final Fetcher injected;
     final String loaderVersion;
@@ -321,7 +323,7 @@ public final class Updater {
             if (m.bundle == null || a.url != null || a.mirrors != null) validateRoutes(a.url, a.mirrors);
             total = Math.addExact(total, a.size);
         }
-        if (total > MAX_BUNDLE || !seen.equals(MODULES)) throw new IOException("Manifest must describe all five modules within the total size limit");
+        if (total > MAX_BUNDLE || !seen.equals(SIGNED_MODULES)) throw new IOException("Manifest must describe all five legacy modules within the total size limit");
         return m;
     }
 

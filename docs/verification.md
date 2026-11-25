@@ -119,3 +119,19 @@ OpenList 访客目录和跳转读回证明外链分发路径可用，不证明�
 ## 同一更新只提醒一次
 
 2026-10-24，提醒改为各通道的已验证待安装更新身份，跨重启记录近期 256 项。完整 Windows / Java 21 候选构建 198 项 Java 测试：197 通过、1 项既有 8.3 路径环境跳过；独立复审 29 项定向测试全过，覆盖首次与缓存命中、翻译变化、两源/两通道、历史文件异常及展示/取消并发。隔离 NeoForge 21.1.233 配置界面回归通过；提醒去重由核心/队列夹具验证，未对真实玩家实例反复弹窗做在线验收。[脱敏记录](acceptance/2026-10-24-update-reminders.json) 保存范围。
+
+## 上游四模块 nightly 与正式版适配
+
+2026-11-25，上游 `IzakyL/folkways` nightly 自 2026-11-24 起改为 core/vanilla/airline/assistant 四模块（内部版本 `0.1.0-nightly.<commit>`），旧集成 create/modulargolems/cookery 不再单独发布，另有 v0.1.0 正式版（11 个模块 jar，`target_commitish` 记录为 `master`）。本版按实际资产识别模块、补齐 Sable 审计 pin、允许缺失的依赖类型按 NeoForge 语义视为 required，并支持以 tag 解析非 SHA 的发布目标。
+
+本地 Linux / Java 21 完整构建通过：Java 213 项测试（核心 187、伴随 26），211 通过、2 项平台专用跳过；Python 发布测试 95 项通过。正式 HTTP Transport（默认 mirror-first）在全新隔离目录实测：
+
+- 新 nightly 安装 core+vanilla 与缺失 LDLib2，提交 `860b56a`，随后复用同一次检查补装 airline+assistant，真实下载 create 6.0.10 与 sable 2.0.6；jpimini 由 assistant 内嵌满足，Sable 内嵌的 veil/sablecompanion 元数据可解析。
+- release 渠道经 annotated tag `v0.1.0` 固定到 `3658c01` 并核对 run 261.1 后安装；取消 airline/assistant 后其 JAR 被移除，已装前置保留。
+- 对不再发布的模块显式拒绝：`Selected Folkways modules are no longer published upstream: create`，且不生成待安装队列。
+
+该探针没有启动 Minecraft、没有执行任何 Mod 类，也没有验证真实存档迁移、完整模组包或 OpenList 主机侧重新部署。[脱敏记录](acceptance/2026-11-25-modern-nightly.json) 保存摘要与边界。
+
+### 发布前对抗审计
+
+rc.3 发布前对上述变更做了对抗性复审：尝试 tag 链无法解析、解析提交无成功 CI、离线 pending 篡改提交、缺失必需模块、混代版本、重复资产、退役模块绕过、未知资产/未知已装 JAR、签名通道回归等路径，均以拒绝或受保护告终；新增了对应的失败/恢复用例。依赖类型缺省语义以 NeoForge 官方文档为准（默认 required）。Sable pin 与真实 Modrinth 元数据及下载字节逐项核对。两项已记录的残留边界：分支目标的发布在离线重验证时不能重新解析 tag（绑定期校验、字节仍按摘要核对）；required 依赖仍强制 versionRange（比 NeoForge 的空范围更严格，失败即拒绝）。独立第二评审因子代理配额耗尽未执行，审计在会话内完成。[审计记录](acceptance/2026-11-25-adversarial-audit.json) 保存命题、攻击与结论。

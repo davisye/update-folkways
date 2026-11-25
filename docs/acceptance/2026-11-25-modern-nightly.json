@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "date": "2026-11-25",
+  "repository": "davisye/update-folkways",
+  "scenario": "real-network staging and installation against the upstream four-module nightly, Airline/Assistant closure, retired-module guidance, and the v0.1.0 release channel pinned through an annotated tag",
+  "artifactIdentity": "local development candidate (0.1.0-dev, buildId local); formal updater publication checked separately",
+  "network": {
+    "realOfficialApisAndTransportUsed": true,
+    "repositories": [
+      "IzakyL/folkways"
+    ],
+    "networkPolicy": "mirror-first (production default)",
+    "platform": "Linux",
+    "java": "21.0.13.1",
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.233",
+    "isolatedFreshInstance": true,
+    "gameLaunched": false,
+    "modClassesExecuted": false
+  },
+  "upstreamSnapshot": {
+    "nightly": {
+      "tag": "nightly",
+      "commit": "860b56a2aa01acb3af6de6aec7d790bf9242e397",
+      "ciSequence": 286002,
+      "prerelease": false,
+      "modules": [
+        "core",
+        "vanilla",
+        "airline",
+        "assistant"
+      ],
+      "internalVersion": "0.1.0-nightly.860b56a",
+      "observations": "Old create/modulargolems/cookery integrations are no longer published; airline pins core and vanilla to the same build and requires create [6.0.10,6.1.0) and sable [2.0.6]; assistant requires jpimini [0.1.0,0.2.0), which it jarjar-bundles as jpi-mini-mc 0.1.0."
+    },
+    "release": {
+      "tag": "v0.1.0",
+      "targetCommitish": "master",
+      "resolvedCommit": "3658c01995bc9af5815af44529c90e6b9821d2bc",
+      "annotatedTagObject": "12894c0c4fe53143ab7f65e6bcae22bfe4cee1f4",
+      "ciSequence": 261001,
+      "ciHeadBranch": "v0.1.0",
+      "assetCount": 11
+    }
+  },
+  "scenarios": [
+    {
+      "id": "nightly-core-vanilla",
+      "selection": [
+        "core",
+        "vanilla"
+      ],
+      "result": "pass",
+      "message": "Downloaded official Folkways [core, vanilla] + required dependencies [ldlib2]; installs after the game JVM exits; commit 860b56a2aa01acb3af6de6aec7d790bf9242e397",
+      "applied": true
+    },
+    {
+      "id": "nightly-airline-assistant",
+      "selection": [
+        "core",
+        "vanilla",
+        "airline",
+        "assistant"
+      ],
+      "result": "pass",
+      "message": "Downloaded official Folkways [core, vanilla, airline, assistant] + required dependencies [create, sable]; commit 860b56a2aa01acb3af6de6aec7d790bf9242e397",
+      "applied": true,
+      "notes": "Sable 2.0.6 matched the airline exact pin; its jarjar-bundled veil 4.3.2 and sablecompanion 1.6.0 were parsed from real metadata, including dependency tables that omit the type field (NeoForge defaults to required). jpimini 0.1.0 came from the assistant bundle, not a separate download."
+    },
+    {
+      "id": "release-v0.1.0-branch-target",
+      "selection": [
+        "core",
+        "vanilla"
+      ],
+      "channel": "release",
+      "result": "pass",
+      "message": "Downloaded official Folkways [core, vanilla] + required dependencies [ldlib2]; commit 3658c01995bc9af5815af44529c90e6b9821d2bc",
+      "applied": true,
+      "notes": "Release records target_commitish=master; the updater resolved the annotated tag v0.1.0 to 3658c01..., required the matching successful build.yml push run 261.1 on head branch v0.1.0, and deselected airline/assistant were removed on install while owned prerequisites were retained."
+    },
+    {
+      "id": "retired-module-guidance",
+      "selection": [
+        "core",
+        "vanilla",
+        "create"
+      ],
+      "channel": "nightly",
+      "result": "pass",
+      "message": "Selected Folkways modules are no longer published upstream: create",
+      "applied": false,
+      "notes": "Rejected before any download; no pending plan and installed files unchanged."
+    }
+  ],
+  "files": [
+    {
+      "name": "folkways-core-neoforge-1.21.1-0.1.0-nightly.860b56a.jar",
+      "sha256": "f1a60a69be420a6851ce5b661ca2c056afecf6d6015331c556f76c6dc2a7a39c",
+      "size": 4139361,
+      "version": "0.1.0",
+      "note": "release-scope content retained its stable installed filename from the nightly install"
+    },
+    {
+      "name": "folkways-vanilla-neoforge-1.21.1-0.1.0-nightly.860b56a.jar",
+      "sha256": "f72249e0b5a6d5e407f3f3fbb4c6aa5392344c0f3c40fafce9636f2721ce9daa",
+      "size": 2693715,
+      "version": "0.1.0"
+    },
+    {
+      "name": "ldlib2-neoforge-1.21.1-2.2.37-all.jar",
+      "sha256": "a3848cb43242c5367b984142e520ff8f4324ff67945b728e2a2b606846fc9484",
+      "size": 7215985,
+      "version": "2.2.37"
+    },
+    {
+      "name": "create-1.21.1-6.0.10.jar",
+      "sha256": "ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a",
+      "size": 19123767,
+      "version": "6.0.10"
+    },
+    {
+      "name": "sable-neoforge-1.21.1-2.0.6.jar",
+      "sha256": "9c199157843bf953a47dff625fc5bb41c01a90538d35ad18e6996bbcb8a617c2",
+      "size": 12986135,
+      "version": "2.0.6"
+    }
+  ],
+  "limits": {
+    "gameLaunched": false,
+    "modClassesExecuted": false,
+    "airlineAssistantLoadedInGame": false,
+    "fullFolkwaysPackTested": false,
+    "saveDataMigrationExercised": false,
+    "openListSyncDeploymentVerifiedInThisRecord": false,
+    "signedManifestChannelModernized": false
+  }
+}

@@ -126,7 +126,12 @@ public final class UpdaterMod {
             }
             catch (Exception e) {
                 LOG.warn("Folkways check unavailable ({})", e.getClass().getSimpleName());
-                folkways = new UpdateCheckResult("Folkways check unavailable; installed Folkways retained", null);
+                String reason = e.getMessage();
+                String retired = "Selected Folkways modules are no longer published upstream: ";
+                String modules = reason != null && reason.startsWith(retired) ? reason.substring(retired.length()) : "";
+                folkways = new UpdateCheckResult(modules.matches("[a-z][a-z, ]{0,120}")
+                        ? "所选模块 " + modules + " 已并入上游 Core/Vanilla，不再单独发布；请在配置中取消勾选后重新检查。现有文件已保留。"
+                        : "Folkways check unavailable; installed Folkways retained", null);
             }
             lastCheckStatus = self.message() + " | " + folkways.message();
             var queue = new UpdateReminderQueue<String>();

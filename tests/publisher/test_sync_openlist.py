@@ -62,6 +62,21 @@ def run(repository, snapshot, number=14):
             "repository": {"full_name": repository}, "head_repository": {"full_name": repository}}
 
 
+def modern_release(repository, number=14):
+    """Upstream's current nightly shape: core/vanilla/airline/assistant with hash-suffixed versions."""
+    base = release(repository, number, f"0.1.0-nightly.{number}")
+    kept = [a for a in base["assets"] if a["name"].startswith(("folkways-core-", "folkways-vanilla-"))]
+    for module in ("airline", "assistant"):
+        name = f"folkways-{module}-neoforge-1.21.1-0.1.0-nightly.{number}.jar"
+        payload = f"{repository}:{number}:{module}".encode()
+        kept.append({"id": number * 100 + 90 + len(kept), "name": name, "size": len(payload),
+                     "digest": "sha256:" + hashlib.sha256(payload).hexdigest(), "state": "uploaded",
+                     "updated_at": "2026-11-24T00:00:00Z",
+                     "browser_download_url": f"https://github.com/{repository}/releases/download/nightly/{name}"})
+    base["assets"] = kept
+    return base
+
+
 class SimulatedCrash(BaseException):
     pass
 
@@ -131,8 +146,38 @@ class SyncOpenListTests(unittest.TestCase):
             self.assertTrue(all(asset["url"].startswith(sync.MIRROR + repository + "/") for asset in snapshot["assets"]))
             self.assertEqual(len({asset["name"] for asset in snapshot["assets"]}), 5)
 
+    def test_modern_four_module_nightly_is_accepted_and_unknown_modules_are_not_synced(self):
+        modern = modern_release(REPOSITORIES[0])
+        unknown = copy.deepcopy(modern["assets"][0])
+        unknown["name"] = unknown["name"].replace("folkways-core-", "folkways-carts-")
+        unknown["browser_download_url"] = f"https://github.com/{REPOSITORIES[0]}/releases/download/nightly/" + unknown["name"]
+        modern["assets"].append(unknown)
+        snapshot = sync.validate_release(REPOSITORIES[0], modern)
+        self.assertEqual(len(snapshot["assets"]), 4)
+        self.assertEqual({asset["name"].split("-")[1] for asset in snapshot["assets"]}, {"core", "vanilla", "airline", "assistant"})
+        self.assertTrue(all("0.1.0-nightly.14" in asset["name"] for asset in snapshot["assets"]))
+
+    def test_release_without_required_core_or_vanilla_is_rejected(self):
+        for keep in (("folkways-core-",), ("folkways-vanilla-", "folkways-airline-")):
+            modern = modern_release(REPOSITORIES[0])
+            modern["assets"] = [a for a in modern["assets"] if a["name"].startswith(keep)]
+            with self.subTest(keep=keep), self.assertRaisesRegex(sync.SyncError, "incomplete"):
+                sync.validate_release(REPOSITORIES[0], modern)
+
+    def test_engine_accepts_mixed_layout_sources_and_probes_each_accepted_asset(self):
+        with self.temporary() as temporary:
+            client = FakeClient(storage())
+            client.releases[REPOSITORIES[0]] = modern_release(REPOSITORIES[0])
+            client.runs[REPOSITORIES[0]] = run(REPOSITORIES[0], client.releases[REPOSITORIES[0]])
+            report = sync.SyncEngine(client, Path(temporary), now=lambda: 1000).run(execute=True)
+            self.assertEqual(set(report["acceptedSources"]), set(REPOSITORIES))
+            self.assertEqual(len(client.probes), 9)
+            self.assertIn("folkways-airline-neoforge-1.21.1-0.1.0-nightly.14.jar", tree_of(client))
+            self.assertIn("folkways-cookery-neoforge-1.21.1-0.1.0-nightly.jar", tree_of(client))
+
     def test_missing_duplicate_mixed_and_unauthenticated_assets_are_rejected(self):
-        for change in (lambda r: r["assets"].pop(), lambda r: r["assets"].append(copy.deepcopy(r["assets"][0])),
+        for change in (lambda r: r["assets"].remove(next(a for a in r["assets"] if a["name"].startswith("folkways-vanilla-"))),
+                       lambda r: r["assets"].append(copy.deepcopy(r["assets"][0])),
                        lambda r: r["assets"][0].update(digest=None), lambda r: r["assets"][0].update(size=3),
                        lambda r: r.update(target_commitish="master"), lambda r: r.update(draft=True),
                        lambda r: r["assets"][0].update(browser_download_url="https://evil.invalid/download.jar")):
@@ -238,7 +283,9 @@ class SyncOpenListTests(unittest.TestCase):
             client.after_update = crash
             with self.assertRaises(SimulatedCrash): sync.SyncEngine(client, root, now=lambda: 1000).run(execute=True)
             self.assertTrue((root / "journal.json").exists())
-            for repository in REPOSITORIES: client.releases[repository]["assets"].pop()
+            for repository in REPOSITORIES:
+                assets = client.releases[repository]["assets"]
+                assets[:] = [a for a in assets if not a["name"].startswith("folkways-vanilla-")]
             sync.SyncEngine(client, root, now=lambda: 1001).run(execute=True)
             self.assertEqual(tree_of(client), original); self.assertFalse((root / "journal.json").exists())
 

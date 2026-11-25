@@ -41,7 +41,7 @@
 | `repository` | Folkways 源：`IzakyL/folkways` 或 `davisye/folkways` |
 | `minecraft` | 当前仅 `1.21.1` |
 | `channel` | Folkways 的 `release`、`rc`、`beta`、`alpha`、`nightly` |
-| `modules` | 必含 `core`、`vanilla`；可加 `create`、`modulargolems`、`cookery`，不允许重复 |
+| `modules` | 必含 `core`、`vanilla`；可加 `airline`、`assistant` 及旧集成 `create`、`modulargolems`、`cookery`，不允许重复。签名通道仅支持旧五模块选择 |
 | `manifestUrl` | 空值使用官方 GitHub Release；非空选择独立的可信签名清单 HTTPS 来源 |
 | `publicKeys` | Folkways `keyId → Base64 X509 DER Ed25519 公钥`，由可信发布者预先提供 |
 | `networkPolicy` | `mirror-first`、`direct-first`、`region` |
@@ -82,11 +82,17 @@ Windows 上若直接建连失败，会只读查询已启用的静态系统 HTTP 
 
 `manifestUrl=""`、`publicKeys={}` 是默认官方 GitHub 来源。空实例可首次安装 Core、Vanilla 和缺失的 LDLib2；已受管文件可后续更新。Folkways 的资产摘要、固定提交、对应成功发布 CI 和选中模块集合必须一致；这里不把上游包称为本项目签名或构建。
 
-已有手动或本地编译 Folkways 包默认保持保护。需要更新时，在“更多设置 → 接管现有并更新”确认本次来源、频道和模块；授权只用于这一轮，后续普通轮询不继承强制接管。只有能明确识别的五种单模块 Folkways JAR 可登记；已有受管文件被修改仍拒绝，手动前置与复合/嵌套包不接管。未选中的手动 Folkways 模块需先勾选或由用户移出。完整官方包校验通过后才保存归属与队列；当前 JAR 不变，完全退出后先备份再替换。本地开发开启时暂停此操作，自更新仍独立。LDLib2 以官方 Modrinth 项目/版本和文件摘要为依据；已有前置不应被未知下载覆盖。三个可选扩展无需预装前置就能勾选；检查时会按实际 JAR 声明和固定官方目录补齐缺失的 Create、Modular Golems、Kaleidoscope Cookery 及间接依赖。兼容前置只读复用，冲突保留原文件并提示；取消扩展不自动卸载已安装前置。详见 [前置安装规则](dependencies.md)。
+上游模块集按发布实际资产识别：core/vanilla 必需，airline/assistant 与旧集成 create/modulargolems/cookery 视发布情况可选。自 2026-11-24 起 `IzakyL/folkways` nightly 只发布 core/vanilla/airline/assistant 四个模块，内部版本形如 `0.1.0-nightly.<commit>`；旧集成功能已并入 Core/Vanilla。勾选了不再发布的模块会明确提示取消勾选，不会静默跳过；已托管的旧集成 JAR 在取消勾选后的下次安装时移除。同一发布的模块必须版本一致，模块间精确同构建锁定按真实 JAR 声明校验。nightly 排序以成功发布 CI 的序号为准，不依赖哈希后缀版本号字符串。
+
+发布记录的 `target_commitish` 为完整提交 SHA 时直接固定；为分支名（如正式版 v0.1.0 记录 `master`）时，通过该 release 的 tag（含 annotated tag 逐层解析）固定到唯一完整提交，再核对该提交的成功发布 CI。tag 无法解析为完整提交时拒绝安装。
+
+已有手动或本地编译 Folkways 包默认保持保护。需要更新时，在“更多设置 → 接管现有并更新”确认本次来源、频道和模块；授权只用于这一轮，后续普通轮询不继承强制接管。只有能明确识别的单模块 Folkways JAR（core、vanilla、airline、assistant 及旧集成 create、modulargolems、cookery）可登记；已有受管文件被修改仍拒绝，手动前置与复合/嵌套包不接管。未选中的手动 Folkways 模块需先勾选或由用户移出。完整官方包校验通过后才保存归属与队列；当前 JAR 不变，完全退出后先备份再替换。本地开发开启时暂停此操作，自更新仍独立。LDLib2 以官方 Modrinth 项目/版本和文件摘要为依据；已有前置不应被未知下载覆盖。可选扩展无需预装前置就能勾选；检查时会按实际 JAR 声明和固定官方目录补齐缺失的 Create、Sable、Modular Golems、Kaleidoscope Cookery 及间接依赖（Assistant 的 jpimini 已内嵌）。兼容前置只读复用，冲突保留原文件并提示；取消扩展不自动卸载已安装前置。详见 [前置安装规则](dependencies.md)。
+
+**存档不可降级：** Folkways 新版本会把存档迁移到更高的数据版本（当前上游为 v5），不支持降级。更新器的回退只恢复 Mod JAR，不恢复世界数据；用新版本打开过的存档在回退后可能无法继续使用。首次更新与回退验证务必在复制的实例和存档中进行，并提前备份。
 
 切换 IzakyL 与 davisye 的 nightly 后，结果会显示本轮检查的仓库和频道。两个仓库分别记录版本序号，fork 的 CI 编号较小也能正常切换；同源仍保留防回退与摘要保护。切换先预下载完整模块集合，完全退出整个游戏后才替换，当前运行中的 Folkways 不会立即变化。若目标源校验或依赖检查失败，保留现有安装；其它源的旧队列不会误装。
 
-当前两个源只有 nightly 实际发行；其他渠道若无符合条件的包，保留当前文件。Folkways 检查暂时不可用时不吞掉 updater 自身的检查结果。
+当前 `IzakyL/folkways` 有 nightly 与 v0.1.0 正式版，`davisye/folkways` 只有 nightly 实际发行；其他渠道若无符合条件的包，保留当前文件。Folkways 检查暂时不可用时不吞掉 updater 自身的检查结果。
 
 ## 可选的 Folkways 签名通道
 
