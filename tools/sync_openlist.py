@@ -21,7 +21,8 @@ import urllib.parse
 import urllib.request
 
 REPOSITORIES = ("IzakyL/folkways", "davisye/folkways")
-MODULES = {"core", "vanilla", "create", "modulargolems", "cookery"}
+MODULES = {"core", "vanilla", "create", "modulargolems", "cookery", "airline", "assistant"}
+REQUIRED = {"core", "vanilla"}
 API = "https://api.github.com"
 MIRROR = "https://github.davisye.cn/_github/github.com/"
 LOCAL = "http://127.0.0.1:5244"
@@ -29,7 +30,7 @@ PUBLIC = "https://pan.davisye.cn"
 STORAGE_ID = 5
 MOUNT = "/Guest/folkways"
 MAX_JSON = 4 * 1024 * 1024
-ASSET = re.compile(r"folkways-(core|vanilla|create|modulargolems|cookery)-neoforge-1\.21\.1-([A-Za-z0-9._+\-]+)\.jar")
+ASSET = re.compile(r"folkways-(" + "|".join(sorted(MODULES)) + r")-neoforge-1\.21\.1-([A-Za-z0-9._+\-]+)\.jar")
 
 
 class SyncError(Exception):
@@ -81,7 +82,8 @@ def validate_release(repository, release):
         assets[module].update(url=MIRROR + repository + "/releases/download/nightly/" + name,
                               updated_at=item.get("updated_at"))
         versions.add(version)
-    if set(assets) != MODULES or len(versions) != 1:
+    # Upstream publishes a changing module set; core/vanilla are required, other known modules are optional.
+    if not REQUIRED <= set(assets) or len(versions) != 1:
         raise SyncError("incomplete-or-mixed-release")
     return {"id": release["id"], "commit": release["target_commitish"],
             "assets": sorted(assets.values(), key=lambda a: a["name"])}
@@ -226,7 +228,7 @@ class Client:
                    'page': 1, 'per_page': 0, 'refresh': True}, local=True)
         listed = self._json(PUBLIC + '/api/fs/list', {'path': path, 'password': '', 'page': 1, 'per_page': 0, 'refresh': False})
         content = listed.get('content') if isinstance(listed, dict) else None
-        if (not isinstance(content, list) or len(content) != 5
+        if (not isinstance(content, list) or len(content) != len(assets)
                 or {x.get('name'): x.get('size') for x in content} != {a['name']: a['size'] for a in assets}
                 or any(x.get('is_dir') for x in content)):
             raise SyncError("public-directory-readback-failed")
@@ -239,7 +241,9 @@ class Client:
                 with self.opener.open(urllib.request.Request(url, headers={'User-Agent': 'folkways-bootstrap/0.1'}), timeout=15):
                     raise SyncError("public-redirect-missing")
             except urllib.error.HTTPError as error:
-                if error.code != 302 or error.headers.get('Location') != asset['url']:
+                location = error.headers.get('Location')
+                error.close()
+                if error.code != 302 or location != asset['url']:
                     raise SyncError("public-redirect-readback-failed") from None
             except OSError:
                 raise SyncError("public-redirect-network-failure") from None

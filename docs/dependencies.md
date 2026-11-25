@@ -1,6 +1,11 @@
 # 可选扩展与前置安装
 
-三个扩展按钮不再要求前置已经加载。空实例也可以先勾选 Create、Modular Golems、Cookery，再点“保存并检查”。更新器将选中 Folkways 模块、缺失主前置和必要的间接依赖作为一批验证、预下载，在整个游戏 JVM 退出后一起安装；下次启动加载。
+扩展按钮不要求前置已经加载。空实例也可以先勾选扩展，再点“保存并检查”。更新器将选中 Folkways 模块、缺失主前置和必要的间接依赖作为一批验证、预下载，在整个游戏 JVM 退出后一起安装；下次启动加载。
+
+可选扩展共五项：
+
+- **Airline**（机场测量、塔台与降落设施）与 **Assistant**（游戏内殖民地助手）是当前上游仍在发布的模块。Airline 需要 Create 与 Sable；Assistant 所需的 jpimini 已内嵌在其 JAR 中，无需额外前置。
+- **Create、Modular Golems、Cookery** 是旧版集成模块。上游已把对应功能并入 Core/Vanilla，新版发布不再包含这三个 JAR；仍发布旧布局的源（如 fork 的历史 nightly）可以继续安装。对不再发布的源勾选它们会明确提示取消勾选；已托管的旧集成 JAR 在取消勾选后的下次安装时移除。
 
 默认仍只选择 Core、Vanilla；不会为了未勾选的扩展下载大型前置。Minecraft 1.21.1、Java 21、NeoForge 21.1.233 或更高版本需要事先安装。
 
@@ -11,14 +16,15 @@
 | 前置 | JAR 声明版本 | 何时需要 | 来源 |
 | --- | --- | --- | --- |
 | LDLib2 | `2.2.37` | 基础 Core 所需 | [官方版本](https://api.modrinth.com/v2/version/bpcbGDy4) / [源码](https://github.com/Low-Drag-MC/LDLib-Architectury) |
-| Create | `6.0.10` | 勾选 Create 扩展 | [官方版本](https://api.modrinth.com/v2/version/UjX6dr61) / [源码](https://github.com/Creators-of-Create/Create) |
+| Create | `6.0.10` | 勾选 Create 扩展或 Airline | [官方版本](https://api.modrinth.com/v2/version/UjX6dr61) / [源码](https://github.com/Creators-of-Create/Create) |
+| Sable | `2.0.6` | 勾选 Airline | [官方版本](https://api.modrinth.com/v2/version/fg9dTRz9) / [源码](https://github.com/ryanhcode/sable) |
 | Modular Golems | `3.1.44` | 勾选 Modular Golems 扩展 | [官方版本](https://api.modrinth.com/v2/version/lcKGfUcI) / [源码](https://github.com/Minecraft-LightLand/ModularGolems) |
 | L2Library | `3.0.9` | Modular Golems 的必需依赖 | [官方版本](https://api.modrinth.com/v2/version/7GS7JBkX) / [源码](https://github.com/Minecraft-LightLand/L2Library) |
 | Kaleidoscope Cookery | `1.6.0-neoforge+mc1.21.1` | 勾选 Cookery 扩展 | [官方版本](https://api.modrinth.com/v2/version/g8w0b2ly) / [源码](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) |
 
 L2Library 的官方 1.21.1 NeoForge 发行在平台标记为 **beta**；当前采用固定的 3.0.9，JAR 声明版本为数字版本。其余表中候选的平台标签为 release。这个标签独立于 Folkways 自己的 release/rc/beta/alpha/nightly 渠道。
 
-Create 和 Folkways Core 自带 Ponder、Flywheel，Modular Golems/L2Library 的若干库也由 JarJar 提供。更新器解析这些内嵌身份和必需依赖，不额外放入重复的外置 JAR；完整所选集合仍需满足所有版本范围。可选、建议或资源包不会因此自动安装。
+Create 和 Folkways Core 自带 Ponder、Flywheel，Modular Golems/L2Library 的若干库也由 JarJar 提供；Assistant 内嵌 jpimini（`jpi-mini-mc`），Core 另内嵌 solve/starlark/saecularia 运行时。更新器解析这些内嵌身份和必需依赖，不额外放入重复的外置 JAR；完整所选集合仍需满足所有版本范围。可选、建议或资源包不会因此自动安装。
 
 ## 现有文件与切换扩展
 
@@ -32,7 +38,7 @@ Create 和 Folkways Core 自带 Ponder、Flywheel，Modular Golems/L2Library 的
 
 依赖文件直接从官方 Modrinth CDN 获取，官方版本 API 用于核对固定证据。[Modrinth 版本接口](https://docs.modrinth.com/api/operations/getversion) 提供项目、MC/加载器、文件哈希与依赖字段；运行时不会将 API 中任意新 URL 当作安装授权。GitHub Folkways 附件继续按网络设置在直连与 github.davisye.cn 之间故障切换。 Windows 已启用静态系统 HTTP 代理时，建连失败可回退到这条既有路径；不要求额外 JVM 参数。仅读取 ProxyEnable/ProxyServer，不修改系统或全局 Java 代理设置，不支持带凭据、PAC 或 SOCKS 的自动转换。TLS、HTTP 状态、正文大小和摘要等校验失败不会借此绕过。
 
-第三方 JAR 不打入 updater，不作为本仓库发行附件，也不上传到 OpenList。Create、Cookery、Modular Golems、L2Library、LDLib2 的许可证和素材条款各自独立；本项目只引用并下载官方文件，重新托管或重新打包需要单独核对许可。
+第三方 JAR 不打入 updater，不作为本仓库发行附件，也不上传到 OpenList。Create、Cookery、Modular Golems、L2Library、LDLib2、Sable 的许可证和素材条款各自独立（Sable 为 PolyForm Shield，仅按官方文件引用下载）；本项目只引用并下载官方文件，重新托管或重新打包需要单独核对许可。
 
 ## 验证范围
 

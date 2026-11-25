@@ -74,7 +74,8 @@ public final class Config {
         if (!"1.21.1".equals(minecraft)) throw new IOException("Only Minecraft 1.21.1 is supported");
         if (!Set.of("release", "rc", "beta", "alpha", "nightly").contains(channel)) throw new IOException("Invalid channel");
         if (modules == null || !modules.containsAll(List.of("core", "vanilla")) || new HashSet<>(modules).size() != modules.size()
-            || !Set.of("core", "vanilla", "create", "modulargolems", "cookery").containsAll(modules)) throw new IOException("Invalid module selection");
+            || !Updater.MODULES.containsAll(modules)) throw new IOException("Invalid module selection");
+        if (!manifestUrl.isBlank() && !Updater.SIGNED_MODULES.containsAll(modules)) throw new IOException("Signed manifest channel supports only the legacy module selection");
         if (publicKeys == null || manifestUrl == null || !Set.of("direct-first", "mirror-first", "region").contains(networkPolicy)) throw new IOException("Invalid network/key configuration");
         if (pollSeconds < 60 || pollSeconds > 86400 || restartLimit < 0 || restartLimit > 50 || restartCooldownSeconds < 1 || restartCooldownSeconds > 600) throw new IOException("Invalid timing limits");
         if (!Set.of("nightly", "release").contains(selfUpdateChannel)) throw new IOException("Invalid updater self-update channel");

@@ -15,9 +15,11 @@ class GitHubFolkwaysTest {
     GitHubFolkways.Release release; SelfUpdater.Run run;
     Map<String,byte[]> downloads = new HashMap<>();
     int calls, libraryRequests; boolean offline, badLibraryMetadata;
+    String tagCommit; boolean annotatedTag;
     java.util.function.Consumer<String> duringDownload = ignored -> {};
     Path pending() { return game.resolve(".folkways-updater/github-folkways-pending"); }
     Path journal() { return game.resolve(".folkways-updater/" + GitHubFolkways.JOURNAL); }
+    String pinnedSha() { return tagCommit != null ? tagCommit : release.target_commitish; }
     void fixture(boolean library) throws Exception {
         Updater.initialize(game); config = Config.load(game); config.localDevelopment = false; save(); Files.createDirectories(game.resolve("mods"));
         if (library) Files.write(game.resolve("mods/user-ldlib.jar"), jar("ldlib2", "2.2.37", ""));
@@ -39,6 +41,33 @@ class GitHubFolkwaysTest {
         run.path = ".github/workflows/build.yml"; run.head_branch = "master"; run.event = "push"; run.status = "completed"; run.conclusion = "success";
         run.repository = new SelfUpdater.Repo(); run.repository.full_name = config.repository; run.head_repository = run.repository;
     }
+    /** Upstream's current nightly shape: four modules, hash-suffixed versions, exact same-build pins. */
+    void publishModern(long number) throws Exception {
+        publish(number);
+        String version = "0.1.0-nightly." + release.target_commitish.substring(0, 7);
+        release.assets = new ArrayList<>();
+        for (String module : List.of("core", "vanilla", "airline", "assistant")) {
+            String id = "folkways_" + module;
+            String dependencies = module.equals("core") ? dependency(id, "ldlib2", "[2.2.37,)") : dependency(id, "folkways_core", "[" + version + "]");
+            if (module.equals("airline")) dependencies += dependency(id, "folkways_vanilla", "[" + version + "]") + dependency(id, "create", "[6.0.10,6.1.0)") + dependency(id, "sable", "[2.0.6]");
+            if (module.equals("assistant")) dependencies += dependency(id, "jpimini", "[0.1.0,0.2.0)");
+            byte[] bytes = jar(id, version, dependencies + "#build " + number);
+            if (module.equals("assistant")) bytes = ApprovedDependenciesTest.nested(bytes, "jpimini", "0.1.0", jar("jpimini", "0.1.0", ""));
+            GitHubFolkways.Asset asset = new GitHubFolkways.Asset(); asset.id = number * 100 + release.assets.size();
+            asset.name = "folkways-" + module + "-neoforge-1.21.1-" + version + ".jar";
+            asset.browser_download_url = "https://github.com/" + config.repository + "/releases/download/nightly/" + asset.name;
+            asset.size = bytes.length; asset.digest = "sha256:" + Updater.sha(bytes); asset.state = "uploaded";
+            release.assets.add(asset); downloads.put(asset.browser_download_url, bytes);
+        }
+    }
+    void retagRelease(String tag) throws Exception {
+        for (GitHubFolkways.Asset asset : release.assets) {
+            byte[] bytes = downloads.remove(asset.browser_download_url);
+            asset.browser_download_url = "https://github.com/" + config.repository + "/releases/download/" + tag + "/" + asset.name;
+            downloads.put(asset.browser_download_url, bytes);
+        }
+        release.tag_name = tag;
+    }
     GitHubFolkways.Source source() {
         return new GitHubFolkways.Source() {
             public byte[] official(String url, long maximum) throws Exception {
@@ -50,7 +79,15 @@ class GitHubFolkwaysTest {
                     file.hashes = Map.of("sha512", "46114d746ed045bf9bfdab87877436bc24f3120362b89256aa4749ff794691988f58b694208aca4297f5042fd24cb3387590b9bc20b28d708c6e246aaa669c7b");
                     library.files = List.of(file); return json(library);
                 }
-                if (url.contains("/commits/")) { GitHubFolkways.Commit commit = new GitHubFolkways.Commit(); commit.sha = release.target_commitish; return json(commit); }
+                if (url.contains("/git/ref/tags/")) {
+                    GitHubFolkways.Ref ref = new GitHubFolkways.Ref(); ref.object = new GitHubFolkways.GitObject();
+                    ref.object.type = annotatedTag ? "tag" : "commit"; ref.object.sha = annotatedTag ? String.format("%040x", 999) : pinnedSha(); return json(ref);
+                }
+                if (url.contains("/git/tags/")) {
+                    GitHubFolkways.Ref ref = new GitHubFolkways.Ref(); ref.object = new GitHubFolkways.GitObject();
+                    ref.object.type = "commit"; ref.object.sha = pinnedSha(); return json(ref);
+                }
+                if (url.contains("/commits/")) { GitHubFolkways.Commit commit = new GitHubFolkways.Commit(); commit.sha = pinnedSha(); return json(commit); }
                 if (url.contains("/actions/")) { GitHubFolkways.Runs runs = new GitHubFolkways.Runs(); runs.workflow_runs = List.of(run); return json(runs); }
                 if (url.endsWith("/releases?per_page=50")) return json(new GitHubFolkways.Release[]{release});
                 assertTrue(url.equals("https://api.github.com/repos/" + config.repository + "/releases/tags/nightly")); return json(release);
@@ -162,6 +199,14 @@ class GitHubFolkwaysTest {
         assertTrue(ModMetadata.matches("1.6.0-neoforge+mc1.21.1", "[1.6.0-neoforge+mc1.21.1,1.7)"));
         assertThrows(IOException.class, () -> ModMetadata.matches("2.2.37-unknown", "[2.2.37,)"));
     }
+    @Test void omittedDependencyTypeDefaultsToRequiredLikeNeoForge() throws Exception {
+        // Veil 4.3.2 (jarjar-bundled by Sable) declares platform dependencies without a type field.
+        String extra = "\n[[dependencies.folkways_core]]\nmodId=\"sometool\"\nversionRange=\"[1.0,)\"\n";
+        ModMetadata info = ModMetadata.read(jar("folkways_core", "0.1.0", extra));
+        assertTrue(info.required.stream().anyMatch(d -> d.id.equals("sometool") && d.range.equals("[1.0,)")));
+        String invalid = "\n[[dependencies.folkways_core]]\nmodId=\"sometool\"\ntype=\"unknown\"\nversionRange=\"[1.0,)\"\n";
+        assertThrows(IOException.class, () -> ModMetadata.read(jar("folkways_core", "0.1.0", invalid)));
+    }
     @Test void sourceSwitchUsesIndependentHighWaterAndCanReturnToAnAlreadyAcceptedBuild() throws Exception {
         fixture(true); publish(114); updater.checkAndStage(); updater.applyPending();
         String upstreamScope = config.scope(); byte[] upstreamCore = Files.readAllBytes(game.resolve("mods/folkways-core-neoforge-1.21.1-0.1.0.jar"));
@@ -179,5 +224,50 @@ class GitHubFolkwaysTest {
         assertTrue(updater.applyPending().contains("different source")); assertArrayEquals(queued, Files.readAllBytes(pending().resolve("plan.json")));
         config.repository = "davisye/folkways"; save(); publish(14); String ready = updater.checkAndStage();
         assertTrue(ready.contains("already downloaded")); assertTrue(ready.contains(release.target_commitish)); updater.applyPending(); assertEquals(config.scope(), state().scope);
+    }
+    @Test void modernFourModuleNightlyInstallsCoreVanillaWithHashSuffixedSameBuildPins() throws Exception {
+        fixture(true); publishModern(2);
+        assertTrue(updater.checkAndStage().contains("Downloaded official"));
+        assertTrue(updater.applyPending().contains("Installed official"));
+        assertEquals(Set.of("folkways_core", "folkways_vanilla"), state().owned.keySet());
+        assertTrue(updater.checkAndStage().contains("Already installed"));
+    }
+    @Test void retiredSelectedModuleIsRejectedWithGuidanceAndNoPending() throws Exception {
+        fixture(true); publishModern(2); config.modules = new ArrayList<>(List.of("core", "vanilla", "create")); save();
+        assertTrue(assertThrows(IOException.class, updater::checkAndStage).getMessage().contains("no longer published upstream: create"));
+        assertFalse(Files.exists(pending())); assertEquals(1, Files.list(game.resolve("mods")).count());
+    }
+    @Test void unknownUpstreamAssetsAreIgnoredButUnknownInstalledFolkwaysJarsStayProtected() throws Exception {
+        fixture(true); publishModern(2);
+        byte[] carts = jar("folkways_carts", "0.1.0-nightly." + release.target_commitish.substring(0, 7), "");
+        GitHubFolkways.Asset asset = new GitHubFolkways.Asset(); asset.id = 999; asset.name = "folkways-carts-neoforge-1.21.1-0.1.0-nightly." + release.target_commitish.substring(0, 7) + ".jar";
+        asset.browser_download_url = "https://github.com/" + config.repository + "/releases/download/nightly/" + asset.name;
+        asset.size = carts.length; asset.digest = "sha256:" + Updater.sha(carts); asset.state = "uploaded"; release.assets.add(asset); downloads.put(asset.browser_download_url, carts);
+        assertTrue(updater.checkAndStage().contains("Downloaded official")); assertTrue(updater.applyPending().contains("Installed official"));
+        Files.write(game.resolve("mods/" + asset.name), carts);
+        assertTrue(assertThrows(IOException.class, updater::checkAndStage).getMessage().contains("Unrecognized Folkways-named JAR"));
+    }
+    @Test void releaseChannelPinsBranchTargetThroughItsAnnotatedTagAndCi() throws Exception {
+        fixture(true); config.channel = "release"; save(); publish(2);
+        String sha = release.target_commitish; retagRelease("v0.1.0");
+        release.prerelease = false; release.target_commitish = "master";
+        tagCommit = sha; annotatedTag = true; run.head_sha = sha; run.head_branch = "v0.1.0";
+        assertTrue(updater.checkAndStage().contains("Downloaded official"));
+        assertTrue(updater.applyPending().contains("Installed official"));
+        assertTrue(updater.checkAndStage().contains("Already installed"));
+    }
+    @Test void releaseChannelWithoutMatchingCiOrResolvableTagIsRejected() throws Exception {
+        fixture(true); config.channel = "release"; save(); publish(2);
+        String sha = release.target_commitish; retagRelease("v0.1.0");
+        release.prerelease = false; release.target_commitish = "master";
+        tagCommit = sha; annotatedTag = true; run.head_sha = String.format("%040x", 999); run.head_branch = "v0.1.0";
+        assertThrows(IOException.class, updater::checkAndStage); assertFalse(Files.exists(pending()));
+        run.head_sha = sha; tagCommit = null; // The tag chain no longer resolves to a full commit SHA.
+        assertThrows(IOException.class, updater::checkAndStage); assertFalse(Files.exists(pending()));
+    }
+    @Test void exactSameBuildNightlyPinsMatchByIdentityWithoutOrderingHashSuffixes() throws Exception {
+        assertTrue(ModMetadata.matches("0.1.0-nightly.860b56a", "[0.1.0-nightly.860b56a]"));
+        assertTrue(ModMetadata.matches("0.1.0-nightly.860b56a", "[0.1.0-nightly.860b56a,)"));
+        assertThrows(IOException.class, () -> ModMetadata.matches("0.1.0-nightly.1111111", "[0.1.0-nightly.860b56a]"));
     }
 }

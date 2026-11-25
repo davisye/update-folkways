@@ -43,6 +43,9 @@ class ApprovedDependenciesTest {
             byte[] l2 = nested(jar("l2library", "3.0.9", ""), "l2itemselector", "3.0.9", jar("l2itemselector", "3.0.9", ""));
             l2 = nested(l2, "l2tabs", "3.0.5+7", jar("l2tabs", "3.0.5+7", "")); pin("l2library", "3.0.9", l2);
             pin("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1", jar("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1", ""));
+            // Real Sable bundles Veil, whose platform dependency tables omit the type field (NeoForge defaults to required).
+            byte[] veil = jar("veil", "4.3.2", "\n[[dependencies.veil]]\nmodId=\"neoforge\"\nversionRange=\"[21.1.1,)\"\n");
+            pin("sable", "2.0.6", nested(jar("sable", "2.0.6", ""), "veil", "4.3.2", veil));
             refreshCatalog(); base.updater.githubSource = source(); publish(2);
         }
         void pin(String id, String version, byte[] bytes) throws Exception {
@@ -63,6 +66,25 @@ class ApprovedDependenciesTest {
                 if (module.equals("modulargolems")) extra += requires(id, "modulargolems", "[3.1.0,)");
                 if (module.equals("cookery")) extra += requires(id, "kaleidoscope_cookery", "[1.6.0-neoforge+mc1.21.1,1.7)");
                 byte[] bytes = jar(id, "0.1.0", extra + "# build " + sequence); asset.size = bytes.length; asset.digest = "sha256:" + Updater.sha(bytes); base.downloads.put(asset.browser_download_url, bytes);
+            }
+        }
+        /** Upstream's current nightly shape: core/vanilla/airline/assistant with exact same-build pins. */
+        void publishModern(long sequence) throws Exception {
+            base.publish(sequence);
+            String version = "0.1.0-nightly." + base.release.target_commitish.substring(0, 7);
+            base.release.assets = new ArrayList<>();
+            for (String module : List.of("core", "vanilla", "airline", "assistant")) {
+                String id = "folkways_" + module;
+                String extra = module.equals("core") ? requires(id, "ldlib2", "[2.2.37,)") : requires(id, "folkways_core", "[" + version + "]");
+                if (module.equals("airline")) extra += requires(id, "folkways_vanilla", "[" + version + "]") + requires(id, "create", "[6.0.10,6.1.0)") + requires(id, "sable", "[2.0.6]");
+                if (module.equals("assistant")) extra += requires(id, "jpimini", "[0.1.0,0.2.0)");
+                byte[] bytes = jar(id, version, extra + "# build " + sequence);
+                if (module.equals("assistant")) bytes = nested(bytes, "jpimini", "0.1.0", jar("jpimini", "0.1.0", ""));
+                var asset = new GitHubFolkways.Asset(); asset.id = sequence * 100 + base.release.assets.size();
+                asset.name = "folkways-" + module + "-neoforge-1.21.1-" + version + ".jar";
+                asset.browser_download_url = "https://github.com/" + base.config.repository + "/releases/download/nightly/" + asset.name;
+                asset.size = bytes.length; asset.digest = "sha256:" + Updater.sha(bytes); asset.state = "uploaded";
+                base.release.assets.add(asset); base.downloads.put(asset.browser_download_url, bytes);
             }
         }
         GitHubFolkways.Source source() {
@@ -203,5 +225,35 @@ class ApprovedDependenciesTest {
         Path user = fixture.base.game.resolve("mods/user-spark.jar"); byte[] modified = jar("spark", "1.10.124", "# local rebuild"); Files.write(user, modified);
         assertEquals("spark", assertThrows(UnverifiedBundleException.class, fixture.base.updater::checkAndStage).id);
         assertArrayEquals(modified, Files.readAllBytes(user)); assertFalse(Files.exists(fixture.base.pending()));
+    }
+    @Test void modernNightlyInstallsAirlineAndAssistantWithAuditedSableAndBundledJpimini() throws Exception {
+        Fixture fixture = new Fixture("modern-all", List.of("core", "vanilla", "airline", "assistant"));
+        fixture.publishModern(2); fixture.install();
+        assertEquals(Set.of("folkways_core", "folkways_vanilla", "folkways_airline", "folkways_assistant", "ldlib2", "create", "sable"),
+                fixture.base.state().owned.keySet());
+        assertEquals(7, fileCount(fixture.base.game.resolve("mods")));
+        assertEquals(1, fixture.requests.get("Vsable")); assertFalse(fixture.base.state().owned.containsKey("jpimini"));
+        fixture.requests.clear(); assertTrue(fixture.base.updater.checkAndStage().contains("Already installed")); assertTrue(fixture.requests.isEmpty());
+    }
+    @Test void modernNightlyDefaultSelectionInstallsOnlyCoreVanillaAndLdlib2() throws Exception {
+        Fixture fixture = new Fixture("modern-base", List.of("core", "vanilla"));
+        fixture.publishModern(2); fixture.install();
+        assertEquals(Set.of("folkways_core", "folkways_vanilla", "ldlib2"), fixture.base.state().owned.keySet());
+        assertTrue(fixture.requests.keySet().stream().noneMatch(id -> id.equals("Vcreate") || id.equals("Vsable")));
+    }
+    @Test void selectingRetiredIntegrationAgainstModernReleaseIsRejectedWithoutPending() throws Exception {
+        Fixture fixture = new Fixture("modern-retired", List.of("core", "vanilla", "create"));
+        fixture.publishModern(2);
+        assertTrue(assertThrows(IOException.class, fixture.base.updater::checkAndStage).getMessage().contains("no longer published upstream: create"));
+        assertFalse(Files.exists(fixture.base.pending())); assertEquals(0, fileCount(fixture.base.game.resolve("mods")));
+    }
+    @Test void deselectingRetiredIntegrationsRemovesOwnedJarsOnTheNextModernInstall() throws Exception {
+        Fixture fixture = new Fixture("modern-migration", ALL); fixture.install();
+        assertEquals(10, fixture.base.state().owned.size());
+        fixture.base.config.modules = new ArrayList<>(List.of("core", "vanilla")); fixture.base.save();
+        fixture.publishModern(3); fixture.install();
+        assertEquals(Set.of("folkways_core", "folkways_vanilla", "ldlib2", "create", "modulargolems", "l2library", "kaleidoscope_cookery"),
+                fixture.base.state().owned.keySet());
+        assertEquals(7, fileCount(fixture.base.game.resolve("mods")));
     }
 }

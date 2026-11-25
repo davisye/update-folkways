@@ -10,6 +10,7 @@ import java.util.zip.ZipException;
 /** Official-platform default channel, isolated from the user-configured Ed25519 manifest channel. */
 final class GitHubFolkways {
     static final String JOURNAL = "github-folkways-journal.json";
+    static final Set<String> REQUIRED = Set.of("core", "vanilla");
     private static final String STATE = "github-folkways-state.json", PENDING = "github-folkways-pending";
     private static final long LIMIT = 64L * 1024 * 1024;
     interface Source {
@@ -57,10 +58,13 @@ final class GitHubFolkways {
             Source source = source(config); Release release = release(source, config);
             if (release == null) return UpdateCheckResult.status("No official " + config.channel + " Folkways release is available in " + config.repository);
             Map<String,Asset> all = releaseAssets(release, config);
-            Commit commit = decode(source.official(base(config) + "/commits/" + release.target_commitish, 2 * 1024 * 1024), Commit.class);
-            if (commit == null || !release.target_commitish.equals(commit.sha)) throw new IOException("Official Folkways release commit could not be verified");
+            List<String> retired = config.modules.stream().filter(module -> !all.containsKey(module)).toList();
+            if (!retired.isEmpty()) throw new IOException("Selected Folkways modules are no longer published upstream: " + String.join(", ", retired));
+            String pinned = pinnedCommit(source, config, release);
+            Commit commit = decode(source.official(base(config) + "/commits/" + pinned, 2 * 1024 * 1024), Commit.class);
+            if (commit == null || !pinned.equals(commit.sha)) throw new IOException("Official Folkways release commit could not be verified");
             Runs runs = decode(source.official(base(config) + "/actions/workflows/build.yml/runs?head_sha=" + commit.sha + "&event=push&status=success&per_page=20", 4 * 1024 * 1024), Runs.class);
-            SelfUpdater.Run run = successfulRun(runs, release, config.repository);
+            SelfUpdater.Run run = successfulRun(runs, release, config.repository, pinned);
             long sequence = sequence(run); String fingerprint = fingerprint(release);
             long accepted = before.highWater.getOrDefault(config.scope(), 0L);
             if (sequence < accepted || sequence == accepted && !fingerprint.equals(before.accepted.get(config.scope()))) throw new IOException("Official release is older or changed within the same CI build");
@@ -464,11 +468,12 @@ final class GitHubFolkways {
         if (plan == null || plan.schema != 1 || !Set.of("IzakyL/folkways", "davisye/folkways").contains(plan.repository) || !"1.21.1".equals(plan.minecraft)
             || plan.modules == null || !plan.modules.containsAll(List.of("core", "vanilla")) || new HashSet<>(plan.modules).size() != plan.modules.size() || !Updater.MODULES.containsAll(plan.modules)
             || plan.files == null || plan.files.size() < 2 || plan.files.size() > Updater.MODULES.size() + catalog.size() || plan.external == null || plan.external.size() > 64 || plan.loaderVersion == null
-            || plan.release == null || plan.run == null || !Objects.equals(plan.commit, plan.release.target_commitish)) throw new IOException("Invalid official Folkways install plan");
+            || plan.release == null || plan.run == null || plan.commit == null || !plan.commit.matches("[0-9a-f]{40}")
+            || plan.release.target_commitish == null || (plan.release.target_commitish.matches("[0-9a-f]{40}") && !plan.commit.equals(plan.release.target_commitish))) throw new IOException("Invalid official Folkways install plan");
         Config config = configFor(plan); config.validate();
         if (current != null && !sameScope(plan, current)) throw new DifferentSelection();
         Map<String,Asset> assets = releaseAssets(plan.release, config);
-        verifyRun(plan.run, plan.release, plan.repository);
+        verifyRun(plan.run, plan.release, plan.repository, plan.commit);
         if (sequence(plan.run) != plan.sequence || !fingerprint(plan.release).equals(plan.fingerprint)) throw new IOException("Cached official CI/release proof changed");
         Set<String> ids = new HashSet<>(), names = new HashSet<>(), libraryIds = new HashSet<>();
         if (plan.libraries == null || plan.libraries.size() > catalog.size()) throw new IOException("Invalid dependency proof catalogue");
@@ -510,7 +515,8 @@ final class GitHubFolkways {
     }
     private static Map<String,Asset> releaseAssets(Release release, Config config) throws Exception {
         if (release == null || release.id <= 0 || release.draft || release.assets == null || release.assets.size() > 100 || release.tag_name == null
-            || !release.tag_name.matches("[A-Za-z0-9._+\\-]+") || release.target_commitish == null || !release.target_commitish.matches("[0-9a-f]{40}")
+            || !release.tag_name.matches("[A-Za-z0-9._+\\-]+") || release.target_commitish == null
+            || !(release.target_commitish.matches("[0-9a-f]{40}") || release.target_commitish.matches("[A-Za-z0-9._/\\-]+"))
             || !Objects.equals(release.url, base(config) + "/releases/" + release.id)
             || (config.channel.equals("nightly") ? !release.tag_name.equals("nightly") : config.channel.equals("release") ? release.prerelease || release.tag_name.equals("nightly") : !release.prerelease || !release.tag_name.toLowerCase(Locale.ROOT).contains(config.channel))) throw new IOException("Official Folkways release identity is invalid or not pinned to a commit");
         Map<String,Asset> result = new TreeMap<>(); String version = null;
@@ -527,17 +533,30 @@ final class GitHubFolkways {
                 if (version != null && !version.equals(current)) throw new IOException("Official release mixes module versions"); version = current;
             }
         }
-        if (!result.keySet().equals(Updater.MODULES)) throw new IOException("Official release does not contain all five Folkways module assets"); return result;
+        // Upstream publishes a changing module set; core/vanilla are required, other known modules are optional,
+        // and unrecognized folkways assets (for example retired or not-yet-supported integrations) are not installed.
+        if (!result.keySet().containsAll(REQUIRED)) throw new IOException("Official release is missing the required core/vanilla Folkways modules"); return result;
     }
-    private static SelfUpdater.Run successfulRun(Runs runs, Release release, String repository) throws Exception {
+    /** A release may record its branch instead of a SHA; the immutable tag then pins the exact built commit. */
+    private static String pinnedCommit(Source source, Config config, Release release) throws Exception {
+        if (release.target_commitish.matches("[0-9a-f]{40}")) return release.target_commitish;
+        Ref ref = decode(source.official(base(config) + "/git/ref/tags/" + release.tag_name, 1024 * 1024), Ref.class);
+        for (int depth = 0; depth < 5 && ref != null && ref.object != null; depth++) {
+            if ("commit".equals(ref.object.type) && ref.object.sha != null && ref.object.sha.matches("[0-9a-f]{40}")) return ref.object.sha;
+            if (!"tag".equals(ref.object.type) || ref.object.sha == null || !ref.object.sha.matches("[0-9a-f]{40}")) break;
+            ref = decode(source.official(base(config) + "/git/tags/" + ref.object.sha, 1024 * 1024), Ref.class);
+        }
+        throw new IOException("Official Folkways release tag does not resolve to one pinned commit");
+    }
+    private static SelfUpdater.Run successfulRun(Runs runs, Release release, String repository, String pinned) throws Exception {
         if (runs == null || runs.workflow_runs == null || runs.workflow_runs.size() > 20) throw new IOException("Official CI response is invalid");
         List<SelfUpdater.Run> valid = new ArrayList<>();
-        for (SelfUpdater.Run run : runs.workflow_runs) { try { verifyRun(run, release, repository); valid.add(run); } catch (IOException ignored) { } }
+        for (SelfUpdater.Run run : runs.workflow_runs) { try { verifyRun(run, release, repository, pinned); valid.add(run); } catch (IOException ignored) { } }
         return valid.stream().max(Comparator.comparingLong(r -> r.run_number)).orElseThrow(() -> new IOException("No successful official Folkways push CI exists for this release commit"));
     }
-    private static void verifyRun(SelfUpdater.Run run, Release release, String repository) throws Exception {
+    private static void verifyRun(SelfUpdater.Run run, Release release, String repository, String pinned) throws Exception {
         if (run == null || run.id <= 0 || run.run_number <= 0 || run.run_attempt <= 0 || run.run_attempt >= 1000 || !"completed".equals(run.status) || !"success".equals(run.conclusion)
-            || !"push".equals(run.event) || !".github/workflows/build.yml".equals(run.path) || !release.target_commitish.equals(run.head_sha)
+            || !"push".equals(run.event) || !".github/workflows/build.yml".equals(run.path) || !pinned.equals(run.head_sha)
             || run.repository == null || !repository.equals(run.repository.full_name) || run.head_repository == null || !repository.equals(run.head_repository.full_name)
             || !List.of("master", "main", release.tag_name).contains(run.head_branch)) throw new IOException("Folkways release CI must be a successful same-repository push on its pinned commit");
         sequence(run);
@@ -569,6 +588,8 @@ final class GitHubFolkways {
     static final class Release { long id; String url, tag_name, target_commitish; boolean draft, prerelease; List<Asset> assets; }
     static final class Asset { long id, size; String name, browser_download_url, digest, state; }
     static final class Commit { String sha; }
+    static final class Ref { GitObject object; }
+    static final class GitObject { String type, sha; }
     static final class Runs { List<SelfUpdater.Run> workflow_runs; }
     static final class Modrinth { String id, project_id; List<String> game_versions, loaders; List<ModrinthFile> files; }
     static final class ModrinthFile { String url, filename; long size; boolean primary; Map<String,String> hashes; }

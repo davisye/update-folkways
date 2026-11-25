@@ -201,8 +201,8 @@ public final class ClientUiSmoke {
         requireConfigScreen(mc);
         checkBounds(screen);
         requireOptionalControls(screen);
-        // 缺少三个前置时仍能实际点击，并将三项扩展一起保存。
-        for (int index = 0; index < 3; index++) optionalButton(mc.screen, index).onPress();
+        // 缺少前置时仍能实际点击，并将五项扩展一起保存。
+        for (int index = 0; index < 5; index++) optionalButton(mc.screen, index).onPress();
         // 取消后重选第一项，验证两方向的实际交互，最终仍全选。
         optionalButton(mc.screen, 0).onPress();
         optionalButton(mc.screen, 0).onPress();
@@ -231,8 +231,8 @@ public final class ClientUiSmoke {
         Config saved = Config.load(game);
         require(expectedRepository.equals(saved.repository), "仓库按钮没有保存到共享配置");
         require(saved.localDevelopment == expectedLocal, "本地开发按钮没有保存到共享配置");
-        require(new java.util.HashSet<>(saved.modules).equals(Set.of("core", "vanilla", "create", "modulargolems", "cookery")),
-                "缺少前置时三个可选扩展没有全部保存");
+        require(new java.util.HashSet<>(saved.modules).equals(Set.of("core", "vanilla", "create", "modulargolems", "cookery", "airline", "assistant")),
+                "缺少前置时五个可选扩展没有全部保存");
         RESULT.put("allOptionalModulesSavedWithoutPrerequisites", true);
         require(saved.restartLimit == 17 && saved.restartCooldownSeconds == 23, "保存覆盖了外部编辑的隐藏字段");
         require(Files.isRegularFile(game.resolve(".folkways-updater/LOCAL_DEVELOPMENT"))
@@ -336,7 +336,7 @@ public final class ClientUiSmoke {
         List<AbstractButton> controls = widgets(screen).stream()
                 .filter(AbstractButton.class::isInstance).map(AbstractButton.class::cast)
                 .filter(widget -> containsKey(widget.getMessage(), PREFIX + "module")).toList();
-        require(controls.size() == 3 && index >= 0 && index < controls.size(), "可选扩展按钮缺失");
+        require(controls.size() == 5 && index >= 0 && index < controls.size(), "可选扩展按钮缺失");
         AbstractButton control = controls.get(index);
         require(control.active && control.visible, "缺少前置时不能勾选扩展");
         return control;
@@ -345,7 +345,7 @@ public final class ClientUiSmoke {
     private static void requireOptionalControls(Screen screen) {
         List<AbstractWidget> controls = widgets(screen).stream()
                 .filter(widget -> containsKey(widget.getMessage(), PREFIX + "module")).toList();
-        require(controls.size() == 3, "基础页没有三个可选扩展控件");
+        require(controls.size() == 5, "基础页没有五个可选扩展控件");
         for (AbstractWidget control : controls) require(control.visible && control.active, "缺少前置的扩展仍应允许选择自动安装");
         require(!ModList.get().isLoaded("create") && !ModList.get().isLoaded("modulargolems")
                 && !ModList.get().isLoaded("kaleidoscope_cookery"), "验收实例意外带入了可选扩展前置");

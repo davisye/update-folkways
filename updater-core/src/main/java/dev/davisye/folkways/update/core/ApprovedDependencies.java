@@ -51,6 +51,9 @@ final class ApprovedDependencies {
             "e13aaa2203b4b927ea946ef3d0f5d3fdb006179fd41e8cb6c1bd1e06421588aab8af6f6096150aa3f01d32e30a3dc3c546ceb71d97fdd6ffc7b476b54bbb6e74", Map.of("l2library", "3.0.9")),
         new Pin("kaleidoscope_cookery", "v17FatAc", "g8w0b2ly", "kaleidoscopecookery-1.6.0-neoforge+mc1.21.1.jar",
             "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar", 3496661,
-            "b562f73395f70d39fb26d89ca62a5b5cebe7d66b11e8930217f0daf03fdcea617629728f55e4c8ced690406204c44462a8a568e5c15f05f5940274904ce0b77f", Map.of("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1"))
+            "b562f73395f70d39fb26d89ca62a5b5cebe7d66b11e8930217f0daf03fdcea617629728f55e4c8ced690406204c44462a8a568e5c15f05f5940274904ce0b77f", Map.of("kaleidoscope_cookery", "1.6.0-neoforge+mc1.21.1")),
+        new Pin("sable", "T9PomCSv", "fg9dTRz9", "sable-neoforge-1.21.1-2.0.6.jar",
+            "https://cdn.modrinth.com/data/T9PomCSv/versions/fg9dTRz9/sable-neoforge-1.21.1-2.0.6.jar", 12986135,
+            "76d293ce751a01cb9c095a3659b0a41e03e005480bc9d76dfdc73ec7c2eabf7923740c7b077921d42616673c496cd5143569f2085ddcebe174fd91d81e2a04b8", Map.of("sable", "2.0.6"))
     );
 }

@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- 适配上游新 nightly 布局：模块集按发布实际资产动态识别，core/vanilla 必需，airline/assistant 可选，不再要求旧五模块齐全；未知 Folkways 资产不安装，未识别的已装 Folkways 命名 JAR 仍受保护。
+- 配置页新增 Airline、Assistant 扩展开关。Airline 按审计目录补齐 Sable 2.0.6 与 Create 6.0.10；Assistant 所需 jpimini 已内嵌，无需额外前置。
+- 发布的 `target_commitish` 为分支名时（如 v0.1.0 正式版记录 `master`），通过 release tag（含 annotated tag 逐层解析）固定唯一完整提交，再核对同提交成功发布 CI；release 渠道恢复可用。tag 无法解析为完整提交时拒绝。
+- OpenList nightly 同步接受新四模块布局：core/vanilla 必需，其余已知模块按实际发布同步，公开目录读回数量随实际资产数。
+
+### Changed
+
+- 勾选了上游不再发布的模块（旧集成已并入 Core/Vanilla）时明确提示取消勾选；已托管的旧集成 JAR 在取消勾选后的下次安装时移除，不静默跳过。
+- 配置页与文档新增存档警告：Folkways 存档迁移后不可降级（当前上游数据版本 v5），回退只恢复 JAR，请先备份存档并在复制实例验证。
+- 签名 manifest 通道保持旧五模块契约；其抓取/签名工具当前仅适用于仍发布旧布局的源，公共签名发布启用前需先现代化。
+
 ### Fixed
 
 - 同一待安装更新按独立构建身份持久去重，重复检查、状态变化和重启不再重复提醒；状态页继续刷新。
