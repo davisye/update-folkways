@@ -28,13 +28,13 @@ JVM 退出后，helper 重查其他游戏进程、各通道开关、文件归属
 
 updater 自身固定使用本仓库的官方发布与成功 CI 构建。`selfUpdateEnabled=true` 时可检查自身，`selfUpdateChannel` 可选择 `nightly` 或 `release`。
 
-Folkways 的 `manifestUrl` 留空时使用所选仓库官方 GitHub Release：核对资产摘要、固定提交、对应成功发布 CI，并保持一次安装内的模块来自同一构建。当前两源只有 nightly；选中尚未发行的渠道不会编造下载地址。
+Folkways 的 `manifestUrl` 留空时使用所选仓库官方 GitHub Release：核对资产摘要、固定提交、对应成功发布 CI，并保持一次安装内的模块来自同一构建。`IzakyL/folkways` 现有 nightly 与 v0.1.0 正式版，`davisye/folkways` 当前只有 nightly；选中尚未发行的渠道不会编造下载地址。
 
 首次自动安装要求实例内没有 Folkways JAR。发现已有手动或本地编译包时保留原文件，不静默建立受管归属。已经由此默认通道安装的文件，后续仍需与原归属摘要一致才能更新。
 
 只有运营方实际提供可信签名清单时才填写 `manifestUrl` 和 `publicKeys`，这会选择独立的 Ed25519 通道。公共自动签名发布仍延期；不要填写陌生密钥来绕过校验。
 
-Create、Modular Golems 和 Cookery 扩展可以在缺少前置时直接勾选。保存并检查会将选中模块、缺失的官方前置及必要的间接依赖作为一批预下载，游戏完全退出后一起安装。已有兼容前置会复用；已有版本不兼容时提示冲突并保留，不静默覆盖。取消扩展不会自动卸载已经安装的前置。见 [前置安装规则](dependencies.md)。
+Airline、Assistant 与旧集成 Create、Modular Golems、Cookery 扩展可以在缺少前置时直接勾选。保存并检查会将选中模块、缺失的官方前置及必要的间接依赖作为一批预下载，游戏完全退出后一起安装。已有兼容前置会复用；已有版本不兼容时提示冲突并保留，不静默覆盖。取消扩展不会自动卸载已经安装的前置。上游已把旧集成并入 Core/Vanilla；勾选某个源不再发布的模块时会提示取消勾选，不会静默跳过。见 [前置安装规则](dependencies.md)。
 
 ## 退出、重开与失败
 
